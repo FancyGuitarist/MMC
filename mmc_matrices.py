@@ -42,27 +42,29 @@ class CompositeType(StrEnum):
 
     @property
     def q_3x3_matrix(self):
+        Q11 = self.properties['Q11']
+        Q22 = self.properties['Q22']
+        Q12 = self.properties['Q12']
+        Q66 = self.properties['Q66']
+        return np.array([[Q11, Q12, 0], [Q12, Q22, 0], [0, 0, Q66]])
+
+    @property
+    def properties(self):
         if self == CompositeType.Glass_Epoxy:
-            E1 = 50 * 10**9
-            E2 = 15.2 * 10**9
-            nu_12 = 0.254
-            nu_21 = (E2 / E1) * nu_12
-            Q11 = E1 / (1 - nu_12 * nu_21)
-            Q22 = E2 / (1 - nu_12 * nu_21)
-            Q12 = nu_12 * E2 / (1 - nu_12 * nu_21)
-            Q66 = 4.70 * 10**9
+            properties_dico = {'E1': 50 * 10**9, 'E2': 15.2 * 10**9, 'nu_12': 0.254, 'Q66': 4.70 * 10**9,
+                               'nu_13': 0.254, 'nu_23': 0.428}
         elif self == CompositeType.Graphite_Epoxy:
-            E1 = 155 * 10 ** 9
-            E2 = 12.1 * 10 ** 9
-            nu_12 = 0.248
-            nu_21 = (E2 / E1) * nu_12
-            Q11 = E1 / (1 - nu_12 * nu_21)
-            Q22 = E2 / (1 - nu_12 * nu_21)
-            Q12 = nu_12 * E2 / (1 - nu_12 * nu_21)
-            Q66 = 4.40 * 10 ** 9
+            properties_dico = {'E1': 155 * 10**9, 'E2': 12.1 * 10**9, 'nu_12': 0.248, 'Q66': 4.40 * 10**9,
+                               'nu_13': 0.248, 'nu_23': 0.458}
         else:
             raise ValueError("Invalid Composite Type")
-        return np.array([[Q11, Q12, 0], [Q12, Q22, 0], [0, 0, Q66]])
+        nu_21 = (properties_dico['E2'] / properties_dico['E1']) * properties_dico['nu_12']
+        Q11 = properties_dico['E1'] / (1 - properties_dico['nu_12'] * nu_21)
+        Q22 = properties_dico['E2'] / (1 - properties_dico['nu_12'] * nu_21)
+        Q12 = properties_dico['nu_12'] * properties_dico['E2'] / (1 - properties_dico['nu_12'] * nu_21)
+        new_values = {'Q11': Q11, 'Q22': Q22, 'Q12': Q12, 'nu_21': nu_21}
+        properties_dico.update(new_values)
+        return properties_dico
 
     @property
     def s_3x3_matrix(self):
@@ -85,6 +87,7 @@ class Composite:
         :param delta_m:
         """
         self.angle = np.radians(angle)
+        self.composite_type = composite_type
         self.variables = [epsilon_x, epsilon_y, gamma_xy, sigma_x, sigma_y, tau_xy]
         self.variables_to_solve = [epsilon_x, epsilon_y, gamma_xy, sigma_x, sigma_y, tau_xy]
         self.delta_t = delta_t
@@ -208,12 +211,24 @@ class Composite:
         solution = solve(equation, self.variables_to_solve)
         return solution
 
+    def epsilon_3(self, stresses: tuple):
+        """
+        Calculate the third strain component from the given stresses.
+        :param stresses: sigma_x, sigma_y, tau_xy
+        :return: epsilon_3
+        """
+        properties = self.composite_type.properties
+        S_13 = -properties['nu_13']/properties['E1']
+        S_23 = -properties['nu_23']/properties['E2']
+        return S_13*(stresses[0]*10**6) + S_23*(stresses[1]*10**6)
+
     def __str__(self):
         return f"{self.strain_matrix(values=(10, 0, None))} = {self.global_s_matrix}*{self.stress_matrix(values=(10, 0, None))}"
 
 
 if __name__ == '__main__':
     composite = Composite(angle=0, composite_type=CompositeType.Glass_Epoxy, delta_t=75)
-    print(CompositeType.Glass_Epoxy.q_3x3_matrix)
-    print(CompositeType.Glass_Epoxy.s_3x3_matrix)
+    print(CompositeType.Glass_Epoxy.q_3x3_matrix/10**9)
+    print(CompositeType.Glass_Epoxy.s_3x3_matrix/10**-12)
     print(composite.solve(strains=(None, None, None), stresses=(20, 10, -5)))
+    print(composite.epsilon_3(stresses=(20, 10, -5)))
