@@ -8,6 +8,18 @@ class TestComposite(unittest.TestCase):
         self.sigma_x, self.sigma_y, self.tau_xy = symbols('sigma_x sigma_y tau_xy')
         self.epsilon_x, self.epsilon_y, self.gamma_xy = symbols('epsilon_x epsilon_y gamma_xy')
 
+    def test_update_variables(self):
+        composite = Composite(composite_type=CompositeType.Graphite_Epoxy)
+        variables = composite.update_variables((None, 10, None), stress=True)
+        self.assertEqual(composite.variables_to_solve, [self.sigma_x, self.tau_xy])
+        self.assertEqual(variables, [self.sigma_x, 10, self.tau_xy])
+
+    def test_reset_variables(self):
+        composite = Composite(composite_type=CompositeType.Graphite_Epoxy)
+        composite.update_variables((None, 10, None), stress=True)
+        composite.reset_variables_to_solve()
+        self.assertEqual(composite.variables_to_solve, [])
+
     def test_composite_w_angle(self):
         sigma_x, sigma_y, tau_xy = self.sigma_x, self.sigma_y, self.tau_xy
         composite = Composite(angle=30, composite_type=CompositeType.Graphite_Epoxy)

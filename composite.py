@@ -113,7 +113,7 @@ class Composite:
     Accepts the composite type, the angle of the fibers, the temperature delta and the moisture delta.
     """
 
-    def __init__(self, composite_type: CompositeType, angle: int = 0, delta_t: int | float = 0,
+    def __init__(self, composite_type: CompositeType, angle: int | float = 0, delta_t: int | float = 0,
                  delta_m: int | float = 0):
         """
         Initialize the Composite Class.
@@ -127,9 +127,12 @@ class Composite:
         self.angle = np.radians(angle)
         self.composite_type = composite_type
         self.variables = [epsilon_x, epsilon_y, gamma_xy, sigma_x, sigma_y, tau_xy]
-        self.variables_to_solve = [epsilon_x, epsilon_y, gamma_xy, sigma_x, sigma_y, tau_xy]
+        self.variables_to_solve = []
         self.delta_t = delta_t
         self.delta_m = delta_m
+
+    def reset_variables_to_solve(self):
+        self.variables_to_solve = []
 
     @property
     def t_matrix(self) -> np.ndarray:
@@ -175,7 +178,7 @@ class Composite:
     def global_thermal_coeffs(self) -> np.ndarray:
         """
         Thermal coefficients in the global referential.
-        :return: alpha_x, alpha_y, alpha_xy, alpha_z
+        :return: (alpha_x, alpha_y, alpha_xy, alpha_z)
         """
         thermal_coeffs = self.composite_type.expansion_coeffs(ExpansionType.Thermal)
         alpha_1, alpha_2, alpha_3 = thermal_coeffs['alpha_1'], thermal_coeffs['alpha_2'], thermal_coeffs['alpha_3']
@@ -185,7 +188,7 @@ class Composite:
     def global_hygroscopic_coeffs(self) -> np.ndarray:
         """
         Hygroscopic coefficients in the global referential.
-        :return: beta_x, beta_y, beta_xy, beta_z
+        :return: (beta_x, beta_y, beta_xy, beta_z)
         """
         hygroscopic_coeffs = self.composite_type.expansion_coeffs(ExpansionType.Hygroscopic)
         beta_1, beta_2, beta_3 = hygroscopic_coeffs['beta_1'], hygroscopic_coeffs['beta_2'], hygroscopic_coeffs[
@@ -218,19 +221,28 @@ class Composite:
         for index, value in enumerate(values):
             if stress:
                 index = index + 3
-            if value is not None:
-                self.variables_to_solve.remove(self.variables[index])
-            else:
+            if value is None:
                 value = self.variables[index]
+                self.variables_to_solve.append(value)
             updated_values.append(value)
         return updated_values
 
-    def stress_matrix(self, values: tuple = (sigma_x, sigma_y, tau_xy)) -> Matrix:
+    def stress_matrix(self, values: tuple) -> Matrix:
+        """
+        Create the stress matrix from the given values.
+        :param values: (sigma_x, sigma_y, tau_xy)
+        :return:
+        """
         variables = self.update_variables(values, stress=True)
         matrix = Matrix([[variables[0]], [variables[1]], [variables[2]]]) * 10 ** 6
         return matrix
 
-    def strain_matrix(self, values: tuple = (epsilon_x, epsilon_y, gamma_xy)) -> Matrix:
+    def strain_matrix(self, values: tuple) -> Matrix:
+        """
+        Create the strain matrix from the given values.
+        :param values: (epsilon_x, epsilon_y, gamma_xy)
+        :return:
+        """
         variables = self.update_variables(values, stress=False)
         total_matrix = None
         for index, variable in enumerate(variables):
@@ -250,6 +262,7 @@ class Composite:
         :param stresses: sigma_x (MPa), sigma_y (MPa), tau_xy (MPa)
         :return: Dictionary of the solved variables
         """
+        self.reset_variables_to_solve()
         strain_matrix = self.strain_matrix(strains)
         stress_matrix = self.stress_matrix(stresses)
         equation = Eq(Matrix(self.global_s_matrix) * stress_matrix, strain_matrix)
@@ -348,9 +361,6 @@ class Composite:
         eq2 = Eq(1, a * Fs_Tsai_Hill ** 2 + b * Fs_Tsai_Hill)
         solution_tsai_hill = solve(eq2, Fs_Tsai_Hill)
         return solution_max, solution_tsai_hill
-
-    def __str__(self):
-        return f"{self.strain_matrix(values=(10, 0, None))} = {self.global_s_matrix}*{self.stress_matrix(values=(10, 0, None))}"
 
 
 if __name__ == '__main__':
