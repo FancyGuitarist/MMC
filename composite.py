@@ -37,7 +37,7 @@ class CompositeType(StrEnum):
     Graphite_Epoxy = "Graphite Epoxy"
 
     @property
-    def q_3x3_matrix(self):
+    def q_3x3_matrix(self) -> np.ndarray:
         Q11 = self.properties['Q11']
         Q22 = self.properties['Q22']
         Q12 = self.properties['Q12']
@@ -45,12 +45,20 @@ class CompositeType(StrEnum):
         return np.array([[Q11, Q12, 0], [Q12, Q22, 0], [0, 0, Q66]])
 
     @property
-    def properties(self):
+    def s_3x3_matrix(self) -> np.ndarray:
+        return np.linalg.inv(self.q_3x3_matrix)
+
+    @property
+    def properties(self) -> dict:
+        """
+        Return the properties of the Composite Type as a dictionary.
+        :return:
+        """
         if self == CompositeType.Glass_Epoxy:
-            properties_dico = {'E1': 50 * 10**9, 'E2': 15.2 * 10**9, 'nu_12': 0.254, 'Q66': 4.70 * 10**9,
+            properties_dico = {'E1': 50 * 10 ** 9, 'E2': 15.2 * 10 ** 9, 'nu_12': 0.254, 'Q66': 4.70 * 10 ** 9,
                                'nu_13': 0.254, 'nu_23': 0.428}
         elif self == CompositeType.Graphite_Epoxy:
-            properties_dico = {'E1': 155 * 10**9, 'E2': 12.1 * 10**9, 'nu_12': 0.248, 'Q66': 4.40 * 10**9,
+            properties_dico = {'E1': 155 * 10 ** 9, 'E2': 12.1 * 10 ** 9, 'nu_12': 0.248, 'Q66': 4.40 * 10 ** 9,
                                'nu_13': 0.248, 'nu_23': 0.458}
         else:
             raise ValueError("Invalid Composite Type")
@@ -63,31 +71,40 @@ class CompositeType(StrEnum):
         return properties_dico
 
     @property
-    def safety_properties(self):
+    def safety_properties(self) -> dict:
+        """
+        Return the safety properties of the Composite Type as a dictionary.
+        :return:
+        """
         if self == CompositeType.Glass_Epoxy:
-            properties_dico = {'sigma_1t': 1000*10**6, 'sigma_1c': -600*10**6, 'sigma_2t': 30*10**6,
-                               'sigma_2c': -120*10**6, 'tau_12f': 70*10**6}
+            safety_properties = {'sigma_1t': 1000 * 10 ** 6, 'sigma_1c': -600 * 10 ** 6, 'sigma_2t': 30 * 10 ** 6,
+                                 'sigma_2c': -120 * 10 ** 6, 'tau_12f': 70 * 10 ** 6}
         elif self == CompositeType.Graphite_Epoxy:
-            properties_dico = {'sigma_1t': 1500*10**6, 'sigma_1c': -1250*10**6, 'sigma_2t': 50*10**6,
-                               'sigma_2c': -200*10**6, 'tau_12f': 100*10**6}
+            safety_properties = {'sigma_1t': 1500 * 10 ** 6, 'sigma_1c': -1250 * 10 ** 6, 'sigma_2t': 50 * 10 ** 6,
+                                 'sigma_2c': -200 * 10 ** 6, 'tau_12f': 100 * 10 ** 6}
         else:
             raise ValueError("Invalid Composite Type")
-        return properties_dico
+        return safety_properties
 
-    def expansion_coeffs(self, expansion_type: ExpansionType):
+    def expansion_coeffs(self, expansion_type: ExpansionType) -> dict:
+        """
+        Return the expansion coefficients for the given Composite Type and Expansion Type.
+        :param expansion_type:
+        :return:
+        """
         if self == CompositeType.Graphite_Epoxy:
-            dico = {ExpansionType.Thermal: {'alpha_1': -0.018 * 10**-6, 'alpha_2': 24.3 * 10**-6, 'alpha_3': 24.3 * 10**-6},
-                    ExpansionType.Hygroscopic: {'beta_1': 146 * 10**-6, 'beta_2': 4770 * 10**-6, 'beta_3': 4770 * 10**-6}}
+            dico = {ExpansionType.Thermal: {'alpha_1': -0.018 * 10 ** -6, 'alpha_2': 24.3 * 10 ** -6,
+                                            'alpha_3': 24.3 * 10 ** -6},
+                    ExpansionType.Hygroscopic: {'beta_1': 146 * 10 ** -6, 'beta_2': 4770 * 10 ** -6,
+                                                'beta_3': 4770 * 10 ** -6}}
         elif self == CompositeType.Glass_Epoxy:
-            dico = {ExpansionType.Thermal: {'alpha_1': 6.34 * 10**-6, 'alpha_2': 23.3 * 10**-6, 'alpha_3': 23.3 * 10**-6},
-                    ExpansionType.Hygroscopic: {'beta_1': 434 * 10**-6, 'beta_2': 6320 * 10**-6, 'beta_3': 6320 * 10**-6}}
+            dico = {ExpansionType.Thermal: {'alpha_1': 6.34 * 10 ** -6, 'alpha_2': 23.3 * 10 ** -6,
+                                            'alpha_3': 23.3 * 10 ** -6},
+                    ExpansionType.Hygroscopic: {'beta_1': 434 * 10 ** -6, 'beta_2': 6320 * 10 ** -6,
+                                                'beta_3': 6320 * 10 ** -6}}
         else:
             raise ValueError("Invalid Composite Type")
         return dico[expansion_type]
-
-    @property
-    def s_3x3_matrix(self):
-        return np.linalg.inv(self.q_3x3_matrix)
 
 
 class Composite:
@@ -95,15 +112,17 @@ class Composite:
     Composite Class to solve for the undefined variables in a Composite Material.
     Accepts the composite type, the angle of the fibers, the temperature delta and the moisture delta.
     """
-    def __init__(self, composite_type: CompositeType, angle: int = 0, delta_t: int | float = 0, delta_m: int | float = 0):
+
+    def __init__(self, composite_type: CompositeType, angle: int = 0, delta_t: int | float = 0,
+                 delta_m: int | float = 0):
         """
         Initialize the Composite Class.
-        Only argument required is the Composite Type.
+        Only required argument is the Composite Type.
         Fiber angle, temperature delta and humidity delta are optional arguments.
         :param composite_type:
-        :param angle:
-        :param delta_t:
-        :param delta_m:
+        :param angle: Angle in degrees
+        :param delta_t: Temperature delta in Celsius
+        :param delta_m: Humidity delta in percentage
         """
         self.angle = np.radians(angle)
         self.composite_type = composite_type
@@ -111,9 +130,6 @@ class Composite:
         self.variables_to_solve = [epsilon_x, epsilon_y, gamma_xy, sigma_x, sigma_y, tau_xy]
         self.delta_t = delta_t
         self.delta_m = delta_m
-        self.s_3x3_matrix = composite_type.s_3x3_matrix
-        self.q_3x3_matrix = composite_type.q_3x3_matrix
-        self.global_s_matrix_cache = None
 
     @property
     def t_matrix(self) -> np.ndarray:
@@ -142,10 +158,7 @@ class Composite:
         """
         S Matrix in the global referential.
         """
-        if self.global_s_matrix_cache is not None:
-            return self.global_s_matrix_cache
-        else:
-            return multiple_matmul(self.t_transposed_matrix, self.s_3x3_matrix, self.t_matrix)
+        return multiple_matmul(self.t_transposed_matrix, self.composite_type.s_3x3_matrix, self.t_matrix)
 
     @property
     def global_q_matrix(self) -> np.ndarray:
@@ -166,11 +179,7 @@ class Composite:
         """
         thermal_coeffs = self.composite_type.expansion_coeffs(ExpansionType.Thermal)
         alpha_1, alpha_2, alpha_3 = thermal_coeffs['alpha_1'], thermal_coeffs['alpha_2'], thermal_coeffs['alpha_3']
-        alpha_x = alpha_1 * np.cos(self.angle) ** 2 + alpha_2 * np.sin(self.angle) ** 2
-        alpha_y = alpha_1 * np.sin(self.angle) ** 2 + alpha_2 * np.cos(self.angle) ** 2
-        alpha_xy = 2 * (alpha_1 - alpha_2) * np.sin(self.angle) * np.cos(self.angle)
-        alpha_z = alpha_3
-        return np.array([alpha_x, alpha_y, alpha_xy, alpha_z])
+        return self.local_to_global_coeffs((alpha_1, alpha_2, alpha_3))
 
     @property
     def global_hygroscopic_coeffs(self) -> np.ndarray:
@@ -179,12 +188,22 @@ class Composite:
         :return: beta_x, beta_y, beta_xy, beta_z
         """
         hygroscopic_coeffs = self.composite_type.expansion_coeffs(ExpansionType.Hygroscopic)
-        beta_1, beta_2, beta_3 = hygroscopic_coeffs['beta_1'], hygroscopic_coeffs['beta_2'], hygroscopic_coeffs['beta_3']
-        beta_x = beta_1 * np.cos(self.angle) ** 2 + beta_2 * np.sin(self.angle) ** 2
-        beta_y = beta_1 * np.sin(self.angle) ** 2 + beta_2 * np.cos(self.angle) ** 2
-        beta_xy = 2 * (beta_1 - beta_2) * np.sin(self.angle) * np.cos(self.angle)
-        beta_z = beta_3
-        return np.array([beta_x, beta_y, beta_xy, beta_z])
+        beta_1, beta_2, beta_3 = hygroscopic_coeffs['beta_1'], hygroscopic_coeffs['beta_2'], hygroscopic_coeffs[
+            'beta_3']
+        return self.local_to_global_coeffs((beta_1, beta_2, beta_3))
+
+    def local_to_global_coeffs(self, values: tuple) -> np.ndarray:
+        """
+        Transform the local coefficients to the global referential.
+        :param values: (alpha_1, alpha_2, alpha_3) or (beta_1, beta_2, beta_3)
+        :return: (alpha_x, alpha_y, alpha_xy, alpha_z) or (beta_x, beta_y, beta_xy, beta_z)
+        """
+        local_1, local_2, local_3 = values
+        local_x = local_1 * np.cos(self.angle) ** 2 + local_2 * np.sin(self.angle) ** 2
+        local_y = local_1 * np.sin(self.angle) ** 2 + local_2 * np.cos(self.angle) ** 2
+        local_xy = 2 * (local_1 - local_2) * np.sin(self.angle) * np.cos(self.angle)
+        local_z = local_3
+        return np.array([local_x, local_y, local_xy, local_z])
 
     def update_variables(self, values: tuple, stress: bool = True) -> list:
         """
@@ -208,7 +227,7 @@ class Composite:
 
     def stress_matrix(self, values: tuple = (sigma_x, sigma_y, tau_xy)) -> Matrix:
         variables = self.update_variables(values, stress=True)
-        matrix = Matrix([[variables[0]], [variables[1]], [variables[2]]])*10**6
+        matrix = Matrix([[variables[0]], [variables[1]], [variables[2]]]) * 10 ** 6
         return matrix
 
     def strain_matrix(self, values: tuple = (epsilon_x, epsilon_y, gamma_xy)) -> Matrix:
@@ -216,7 +235,8 @@ class Composite:
         total_matrix = None
         for index, variable in enumerate(variables):
             matrix = Matrix(
-                [variable*10**-6 - (self.global_thermal_coeffs[index] * self.delta_t) - (self.global_hygroscopic_coeffs[index] * self.delta_m)])
+                [variable * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
+                            self.global_hygroscopic_coeffs[index] * self.delta_m)])
             if index == 0:
                 total_matrix = matrix
             else:
@@ -243,9 +263,9 @@ class Composite:
         :return: epsilon_3 (mu_epsilon)
         """
         properties = self.composite_type.properties
-        S_13 = -properties['nu_13']/properties['E1']
-        S_23 = -properties['nu_23']/properties['E2']
-        return S_13*(stresses[0]*10**6) + S_23*(stresses[1]*10**6)
+        S_13 = -properties['nu_13'] / properties['E1']
+        S_23 = -properties['nu_23'] / properties['E2']
+        return S_13 * (stresses[0] * 10 ** 6) + S_23 * (stresses[1] * 10 ** 6)
 
     def epsilon_z(self, stresses: tuple):
         """
@@ -256,12 +276,12 @@ class Composite:
         beta_3 = self.composite_type.expansion_coeffs(ExpansionType.Hygroscopic)['beta_3']
         alpha_3 = self.composite_type.expansion_coeffs(ExpansionType.Thermal)['alpha_3']
         properties = self.composite_type.properties
-        S_13 = -properties['nu_13']/properties['E1']
-        S_23 = -properties['nu_23']/properties['E2']
-        epsilon_z = (((alpha_3*self.delta_t + beta_3*self.delta_m
-                     + (S_13*np.cos(self.angle)**2 + S_23*np.sin(self.angle)**2)*(stresses[0]*10**6))
-                     + (S_13*np.sin(self.angle)**2 + S_23*np.cos(self.angle)**2)*(stresses[1]*10**6))
-                     + 2*(S_13 - S_23)*np.sin(self.angle)*np.cos(self.angle)*(stresses[2]*10**6))
+        S_13 = -properties['nu_13'] / properties['E1']
+        S_23 = -properties['nu_23'] / properties['E2']
+        epsilon_z = (((alpha_3 * self.delta_t + beta_3 * self.delta_m
+                       + (S_13 * np.cos(self.angle) ** 2 + S_23 * np.sin(self.angle) ** 2) * (stresses[0] * 10 ** 6))
+                      + (S_13 * np.sin(self.angle) ** 2 + S_23 * np.cos(self.angle) ** 2) * (stresses[1] * 10 ** 6))
+                     + 2 * (S_13 - S_23) * np.sin(self.angle) * np.cos(self.angle) * (stresses[2] * 10 ** 6))
         return epsilon_z
 
     def solve_radial_stresses(self, pressure: float, diameter: float, thickness: float):
@@ -274,15 +294,16 @@ class Composite:
         """
         r = diameter / 2
         thickness = thickness / 1000
-        pressure = pressure * 10**6
-        sigma_a = (pressure * r) / (thickness*2)
+        pressure = pressure * 10 ** 6
+        sigma_a = (pressure * r) / (thickness * 2)
         sigma_h = pressure * r / thickness
-        return {'sigma_a': sigma_a / 10**6, 'sigma_h': sigma_h / 10**6}
+        return {'sigma_a': sigma_a / 10 ** 6, 'sigma_h': sigma_h / 10 ** 6}
 
     def mechanical_strains(self, values: tuple = (epsilon_x, epsilon_y, gamma_xy)):
         mec_strains = []
         for index, strain in enumerate(values):
-            mec_strains.append(strain*10**-6 - (self.global_thermal_coeffs[index] * self.delta_t) - (self.global_hygroscopic_coeffs[index] * self.delta_m))
+            mec_strains.append(strain * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
+                        self.global_hygroscopic_coeffs[index] * self.delta_m))
         return np.array(mec_strains)
 
     def global_to_local_strains(self, values: tuple):
@@ -299,7 +320,7 @@ class Composite:
         """
         properties = self.composite_type.safety_properties
         sigma_1, sigma_2, tau_12 = values
-        sigma_1, sigma_2, tau_12 = sigma_1*10**6, sigma_2*10**6, tau_12*10**6
+        sigma_1, sigma_2, tau_12 = sigma_1 * 10 ** 6, sigma_2 * 10 ** 6, tau_12 * 10 ** 6
         sigma_1t, sigma_1c = properties['sigma_1t'], properties['sigma_1c']
         sigma_2t, sigma_2c, tau_12f = properties['sigma_2t'], properties['sigma_2c'], properties['tau_12f']
         if sigma_1 > 0:
@@ -311,18 +332,20 @@ class Composite:
         else:
             sigma_2R = sigma_2c
         Fs_max = symbols('Fs_max')
-        eq1 = Eq(1, Fs_max**2*((sigma_1/sigma_1R)**2 + (sigma_2/sigma_2R)**2 - (sigma_1*sigma_2/sigma_1R**2) + (tau_12/tau_12f)**2))
+        eq1 = Eq(1, Fs_max ** 2 * (
+                    (sigma_1 / sigma_1R) ** 2 + (sigma_2 / sigma_2R) ** 2 - (sigma_1 * sigma_2 / sigma_1R ** 2) + (
+                        tau_12 / tau_12f) ** 2))
         solution_max = solve(eq1, Fs_max)
         Fs_Tsai_Hill = symbols('Fs_Tsai_Hill')
-        F1 = (1/sigma_1t + 1/sigma_1c)
-        F11 = -1/(sigma_1t*sigma_1c)
-        F66 = (1/tau_12f)**2
-        F2 = (1/sigma_2t + 1/sigma_2c)
-        F22 = -1/(sigma_2t*sigma_2c)
-        F12 = -0.5*np.sqrt(F11*F22)
-        a = F11*sigma_1**2 + F22*sigma_2**2 + F66*tau_12**2 - sigma_1*sigma_2*np.sqrt(F11*F22)
-        b = F1*sigma_1 + F2*sigma_2
-        eq2 = Eq(1, a*Fs_Tsai_Hill**2 + b*Fs_Tsai_Hill)
+        F1 = (1 / sigma_1t + 1 / sigma_1c)
+        F11 = -1 / (sigma_1t * sigma_1c)
+        F66 = (1 / tau_12f) ** 2
+        F2 = (1 / sigma_2t + 1 / sigma_2c)
+        F22 = -1 / (sigma_2t * sigma_2c)
+        F12 = -0.5 * np.sqrt(F11 * F22)
+        a = F11 * sigma_1 ** 2 + F22 * sigma_2 ** 2 + F66 * tau_12 ** 2 - sigma_1 * sigma_2 * np.sqrt(F11 * F22)
+        b = F1 * sigma_1 + F2 * sigma_2
+        eq2 = Eq(1, a * Fs_Tsai_Hill ** 2 + b * Fs_Tsai_Hill)
         solution_tsai_hill = solve(eq2, Fs_Tsai_Hill)
         return solution_max, solution_tsai_hill
 
@@ -333,8 +356,8 @@ class Composite:
 if __name__ == '__main__':
     # Question 1
     composite = Composite(angle=0, composite_type=CompositeType.Glass_Epoxy, delta_t=75)
-    print(CompositeType.Glass_Epoxy.q_3x3_matrix/10**9)
-    print(CompositeType.Glass_Epoxy.s_3x3_matrix/10**-12)
+    print(CompositeType.Glass_Epoxy.q_3x3_matrix / 10 ** 9)
+    print(CompositeType.Glass_Epoxy.s_3x3_matrix / 10 ** -12)
     print("déformations=", composite.solve(strains=(None, None, None), stresses=(20, 10, -5)))
     print("epsilon_3=", composite.epsilon_3(stresses=(20, 10, -5)))
 
@@ -342,18 +365,20 @@ if __name__ == '__main__':
     radial_composite = Composite(angle=53, composite_type=CompositeType.Graphite_Epoxy, delta_t=-150, delta_m=1)
     radial_stresses = radial_composite.solve_radial_stresses(pressure=1.2, diameter=0.5, thickness=8)
     print(radial_stresses)
-    print(np.array(radial_composite.global_hygroscopic_coeffs)/10**-6)
-    print(np.array(radial_composite.global_thermal_coeffs)/10**-6)
-    print(radial_composite.global_s_matrix/10**-12)
-    print(radial_composite.global_q_matrix/10**9)
+    print("Coefficients:")
+    print(np.array(radial_composite.global_hygroscopic_coeffs) / 10 ** -6)
+    print(np.array(radial_composite.global_thermal_coeffs) / 10 ** -6)
+    print("Matrices S et Q:")
+    print(radial_composite.global_s_matrix / 10 ** -12)
+    print(radial_composite.global_q_matrix / 10 ** 9)
     print(radial_composite.solve(strains=(None, None, None),
                                  stresses=(radial_stresses['sigma_a'], radial_stresses['sigma_h'], 0)))
-    print(radial_composite.mechanical_strains(values=(1158.93789983545, 2333.70349172889, -3333.67605465999))/10**-6)
+    print(
+        radial_composite.mechanical_strains(values=(1158.93789983545, 2333.70349172889, -3333.67605465999)) / 10 ** -6)
     print(radial_composite.global_to_local_strains((1158.93789983545, 489.807127432113, -4387.74781007873)))
     print(radial_composite.global_to_local_strains((387.53552459, 1831.40586697, -2395.19626092)))
-    print(radial_composite.epsilon_z(stresses=(18.75, 37.5, 0))/10**-6)
+    print(radial_composite.epsilon_z(stresses=(18.75, 37.5, 0)) / 10 ** -6)
     sigma_1, sigma_2, tau_12 = radial_composite.global_to_local_stresses((18.75, 37.5, 0))
     print(sigma_1, sigma_2, tau_12)
     fs_max, fs_tsai = radial_composite.fs_max((sigma_1, sigma_2, tau_12))
     print(fs_max, fs_tsai)
-
