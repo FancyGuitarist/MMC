@@ -1,3 +1,4 @@
+from unittests.composite_tests import *
 import numpy as np
 from enum import StrEnum
 
@@ -248,7 +249,7 @@ class Composite:
         for index, variable in enumerate(variables):
             matrix = Matrix(
                 [variable * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
-                            self.global_hygroscopic_coeffs[index] * self.delta_m)])
+                        self.global_hygroscopic_coeffs[index] * self.delta_m)])
             if index == 0:
                 total_matrix = matrix
             else:
@@ -316,7 +317,7 @@ class Composite:
         mec_strains = []
         for index, strain in enumerate(values):
             mec_strains.append(strain * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
-                        self.global_hygroscopic_coeffs[index] * self.delta_m))
+                    self.global_hygroscopic_coeffs[index] * self.delta_m))
         return np.array(mec_strains)
 
     def global_to_local_strains(self, values: tuple):
@@ -325,6 +326,42 @@ class Composite:
     def global_to_local_stresses(self, values: tuple):
         return np.matmul(self.t_matrix, values)
 
+    def f_ij_elements(self):
+        properties = self.composite_type.safety_properties
+        sigma_1t, sigma_1c = properties['sigma_1t'], properties['sigma_1c']
+        sigma_2t, sigma_2c, tau_12f = properties['sigma_2t'], properties['sigma_2c'], properties['tau_12f']
+        F1 = (1 / sigma_1t + 1 / sigma_1c)
+        F11 = -1 / (sigma_1t * sigma_1c)
+        F66 = (1 / tau_12f) ** 2
+        F2 = (1 / sigma_2t + 1 / sigma_2c)
+        F22 = -1 / (sigma_2t * sigma_2c)
+        F12 = -0.5 * np.sqrt(F11 * F22)
+        dico = {'F1': F1, 'F11': F11, 'F66': F66, 'F2': F2, 'F22': F22, 'F12': F12}
+        return dico
+
+    def tsai_wu_safe(self, values: tuple):
+        """
+        Calculate if the Composite is safe, according to the Tsai-Wu criterion.
+        Returns True if the Composite is safe, False otherwise.
+        :param values: (sigma_1, sigma_2, tau_12) (MPa)
+        :return:
+        """
+        sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
+        f_ijs = self.f_ij_elements()
+        Fs_Tsai_Wu = (f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2 + f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2
+                      + f_ijs['F66'] * tau_12 ** 2 + 2 * f_ijs['F12'] * sigma_1 * sigma_2)
+        return Fs_Tsai_Wu < 1
+
+    def tsai_hill(self, values: tuple):
+        sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
+        Fs_Tsai_Hill = symbols('Fs_Tsai_Hill')
+        f_ijs = self.f_ij_elements()
+        a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
+             - sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
+        b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
+        eq2 = Eq(1, a * Fs_Tsai_Hill ** 2 + b * Fs_Tsai_Hill)
+        return solve(eq2, Fs_Tsai_Hill)
+
     def fs_max(self, values: tuple):
         """
         Calculate security factor for maximum stress.
@@ -332,63 +369,17 @@ class Composite:
         :return: Fs_max
         """
         properties = self.composite_type.safety_properties
-        sigma_1, sigma_2, tau_12 = values
-        sigma_1, sigma_2, tau_12 = sigma_1 * 10 ** 6, sigma_2 * 10 ** 6, tau_12 * 10 ** 6
+        sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
         sigma_1t, sigma_1c = properties['sigma_1t'], properties['sigma_1c']
         sigma_2t, sigma_2c, tau_12f = properties['sigma_2t'], properties['sigma_2c'], properties['tau_12f']
-        if sigma_1 > 0:
-            sigma_1R = sigma_1t
-        else:
-            sigma_1R = sigma_1c
-        if sigma_2 > 0:
-            sigma_2R = sigma_2t
-        else:
-            sigma_2R = sigma_2c
+        sigma_1R = sigma_1t if sigma_1 > 0 else sigma_1c
+        sigma_2R = sigma_2t if sigma_2 > 0 else sigma_2c
         Fs_max = symbols('Fs_max')
         eq1 = Eq(1, Fs_max ** 2 * (
-                    (sigma_1 / sigma_1R) ** 2 + (sigma_2 / sigma_2R) ** 2 - (sigma_1 * sigma_2 / sigma_1R ** 2) + (
-                        tau_12 / tau_12f) ** 2))
-        solution_max = solve(eq1, Fs_max)
-        Fs_Tsai_Hill = symbols('Fs_Tsai_Hill')
-        F1 = (1 / sigma_1t + 1 / sigma_1c)
-        F11 = -1 / (sigma_1t * sigma_1c)
-        F66 = (1 / tau_12f) ** 2
-        F2 = (1 / sigma_2t + 1 / sigma_2c)
-        F22 = -1 / (sigma_2t * sigma_2c)
-        F12 = -0.5 * np.sqrt(F11 * F22)
-        a = F11 * sigma_1 ** 2 + F22 * sigma_2 ** 2 + F66 * tau_12 ** 2 - sigma_1 * sigma_2 * np.sqrt(F11 * F22)
-        b = F1 * sigma_1 + F2 * sigma_2
-        eq2 = Eq(1, a * Fs_Tsai_Hill ** 2 + b * Fs_Tsai_Hill)
-        solution_tsai_hill = solve(eq2, Fs_Tsai_Hill)
-        return solution_max, solution_tsai_hill
+                (sigma_1 / sigma_1R) ** 2 + (sigma_2 / sigma_2R) ** 2 - (sigma_1 * sigma_2 / sigma_1R ** 2) + (
+                tau_12 / tau_12f) ** 2))
+        return solve(eq1, Fs_max)
 
 
 if __name__ == '__main__':
-    # Question 1
-    composite = Composite(angle=0, composite_type=CompositeType.Glass_Epoxy, delta_t=75)
-    print(CompositeType.Glass_Epoxy.q_3x3_matrix / 10 ** 9)
-    print(CompositeType.Glass_Epoxy.s_3x3_matrix / 10 ** -12)
-    print("déformations=", composite.solve(strains=(None, None, None), stresses=(20, 10, -5)))
-    print("epsilon_3=", composite.epsilon_3(stresses=(20, 10, -5)))
-
-    # Question 2
-    radial_composite = Composite(angle=53, composite_type=CompositeType.Graphite_Epoxy, delta_t=-150, delta_m=1)
-    radial_stresses = radial_composite.solve_radial_stresses(pressure=1.2, diameter=0.5, thickness=8)
-    print(radial_stresses)
-    print("Coefficients:")
-    print(np.array(radial_composite.global_hygroscopic_coeffs) / 10 ** -6)
-    print(np.array(radial_composite.global_thermal_coeffs) / 10 ** -6)
-    print("Matrices S et Q:")
-    print(radial_composite.global_s_matrix / 10 ** -12)
-    print(radial_composite.global_q_matrix / 10 ** 9)
-    print(radial_composite.solve(strains=(None, None, None),
-                                 stresses=(radial_stresses['sigma_a'], radial_stresses['sigma_h'], 0)))
-    print(
-        radial_composite.mechanical_strains(values=(1158.93789983545, 2333.70349172889, -3333.67605465999)) / 10 ** -6)
-    print(radial_composite.global_to_local_strains((1158.93789983545, 489.807127432113, -4387.74781007873)))
-    print(radial_composite.global_to_local_strains((387.53552459, 1831.40586697, -2395.19626092)))
-    print(radial_composite.epsilon_z(stresses=(18.75, 37.5, 0)) / 10 ** -6)
-    sigma_1, sigma_2, tau_12 = radial_composite.global_to_local_stresses((18.75, 37.5, 0))
-    print(sigma_1, sigma_2, tau_12)
-    fs_max, fs_tsai = radial_composite.fs_max((sigma_1, sigma_2, tau_12))
-    print(fs_max, fs_tsai)
+    unittest.main()
