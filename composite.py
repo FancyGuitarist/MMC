@@ -339,34 +339,49 @@ class Composite:
         dico = {'F1': F1, 'F11': F11, 'F66': F66, 'F2': F2, 'F22': F22, 'F12': F12}
         return dico
 
-    def tsai_wu_safe(self, values: tuple):
+    def fs_max(self, values: tuple):
         """
-        Calculate if the Composite is safe, according to the Tsai-Wu criterion.
-        Returns True if the Composite is safe, False otherwise.
-        :param values: (sigma_1, sigma_2, tau_12) (MPa)
-        :return:
+        Calculate the maximum safety factor for the given stresses.
+        :param values: sigma_1 (MPa), sigma_2 (MPa), tau_12 (MPa)
+        :return: Fs_max
         """
+        properties = self.composite_type.safety_properties
         sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
-        f_ijs = self.f_ij_elements()
-        Fs_Tsai_Wu = (f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2 + f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2
-                      + f_ijs['F66'] * tau_12 ** 2 + 2 * f_ijs['F12'] * sigma_1 * sigma_2)
-        return Fs_Tsai_Wu < 1
+        security_factors = []
+        if sigma_1 > 0:
+            security_factors.append(properties['sigma_1t'] / sigma_1)
+        else:
+            security_factors.append(properties['sigma_1c'] / sigma_1)
+        if sigma_2 > 0:
+            security_factors.append(properties['sigma_2t'] / sigma_2)
+        else:
+            security_factors.append(properties['sigma_2c'] / sigma_2)
+        if tau_12 > 0:
+            security_factors.append(properties['tau_12f'] / tau_12)
+        else:
+            security_factors.append(-properties['tau_12f'] / tau_12)
+        return min(security_factors)
 
-    def tsai_hill(self, values: tuple):
+    def fs_tsai_wu(self, values: tuple):
+        """
+        Calculate the safety factor using the Tsai-Wu criterion.
+        :param values: sigma_1 (MPa), sigma_2 (MPa), tau_12 (MPa)
+        :return: Fs_tsai_wu
+        """
         sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
-        Fs_Tsai_Hill = symbols('Fs_Tsai_Hill')
+        Fs_tsai_wu = symbols('Fs_tsai_wu')
         f_ijs = self.f_ij_elements()
         a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
              - sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
         b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
-        eq2 = Eq(1, a * Fs_Tsai_Hill ** 2 + b * Fs_Tsai_Hill)
-        return solve(eq2, Fs_Tsai_Hill)
+        eq2 = Eq(1, a * Fs_tsai_wu ** 2 + b * Fs_tsai_wu)
+        return solve(eq2, Fs_tsai_wu)
 
-    def fs_max(self, values: tuple):
+    def fs_tsai_hill(self, values: tuple):
         """
-        Calculate security factor for maximum stress.
-        :param values: sigma_1, sigma_2, tau_12 (MPa)
-        :return: Fs_max
+        Calculate the safety factor using the Tsai-Hill criterion.
+        :param values: sigma_1 (MPa), sigma_2 (MPa), tau_12 (MPa)
+        :return: Fs_tsai_hill
         """
         properties = self.composite_type.safety_properties
         sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
@@ -374,11 +389,11 @@ class Composite:
         sigma_2t, sigma_2c, tau_12f = properties['sigma_2t'], properties['sigma_2c'], properties['tau_12f']
         sigma_1R = sigma_1t if sigma_1 > 0 else sigma_1c
         sigma_2R = sigma_2t if sigma_2 > 0 else sigma_2c
-        Fs_max = symbols('Fs_max')
-        eq1 = Eq(1, Fs_max ** 2 * (
+        Fs_tsai_hill = symbols('Fs_tsai_hill')
+        eq1 = Eq(1, Fs_tsai_hill ** 2 * (
                 (sigma_1 / sigma_1R) ** 2 + (sigma_2 / sigma_2R) ** 2 - (sigma_1 * sigma_2 / sigma_1R ** 2) + (
                 tau_12 / tau_12f) ** 2))
-        return solve(eq1, Fs_max)
+        return solve(eq1, Fs_tsai_hill)
 
 
 if __name__ == '__main__':
