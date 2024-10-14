@@ -1,4 +1,3 @@
-from unittests.composite_tests import *
 import numpy as np
 from enum import StrEnum
 
@@ -397,4 +396,5 @@ class Composite:
 
 
 if __name__ == '__main__':
+    from unittests.composite_tests import *
     unittest.main()
