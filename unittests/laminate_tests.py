@@ -53,5 +53,20 @@ class TestLaminate(unittest.TestCase):
         self.assertTrue(compare_b.all())
         self.assertTrue(compare_c.all())
 
+    def test_inv_abd_matrix(self):
+        lam = Laminate(thetas=[30, -30, 0], h=0.150, composite_type=CompositeType.Graphite_Epoxy)
+        inv_a_matrix = lam.inv_a_matrix * 1e9
+        expected_a = np.array([[41.4649806, -39.83330754, 12.19402388], [-39.83330754, 185.53318223, 22.26465167], [12.19402388, 22.26465167, 150.37129891]])
+        compare_a = np.round(inv_a_matrix, 2) == np.round(expected_a, 2)
+        inv_b_matrix = lam.inv_b_matrix * 1e6
+        expected_b = np.array([[-164.61527041, 179.43487707, 383.86117397], [207.26476213, -71.828884, 52.51080262], [18.79887382, 195.42479121, 706.95480147]])
+        compare_b = np.round(inv_b_matrix, 2) == np.round(expected_b, 2)
+        inv_d_matrix = lam.inv_d_matrix
+        expected_d = np.array([[2.09888038, -1.55292858, -2.42398039], [-1.55292858, 10.8394884, -0.27604197], [-2.42398039, -0.27604197, 16.06881313]])
+        compare_d = np.round(inv_d_matrix, 2) == np.round(expected_d, 2)
+        self.assertTrue(compare_a.all())
+        self.assertTrue(compare_b.all())
+        self.assertTrue(compare_d.all())
+
 # [0, 90, 90, 0]
 # [30, -30, 0, 0, -30, 30]

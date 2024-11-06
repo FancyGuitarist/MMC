@@ -15,7 +15,7 @@ class Laminate:
         self.composite_type = composite_type
         self.h = h/1000
         self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in thetas]
-        self.abd_matrix_cache = None
+        self.abd_matrix_cache, self.inv_abd_cache = None, None
 
     @property
     def q_k(self):
@@ -51,12 +51,21 @@ class Laminate:
         return a_matrix, b_matrix, d_matrix
 
     @property
+    def inv_abd_matrix(self):
+        if self.inv_abd_cache is not None:
+            return self.inv_abd_cache
+        a_matrix, b_matrix, d_matrix = self.abd_matrix
+        abd_matrix = np.block([[a_matrix, b_matrix], [b_matrix, d_matrix]])
+        self.inv_abd_cache = np.linalg.inv(abd_matrix)
+        return self.inv_abd_cache
+
+    @property
     def a_matrix(self):
         return self.abd_matrix[0]
 
     @property
     def inv_a_matrix(self):
-        return np.linalg.inv(self.a_matrix)
+        return self.inv_abd_matrix[:3, :3]
 
     @property
     def b_matrix(self):
@@ -64,7 +73,7 @@ class Laminate:
 
     @property
     def inv_b_matrix(self):
-        return np.linalg.inv(self.b_matrix)
+        return self.inv_abd_matrix[:3, 3:]
 
     @property
     def d_matrix(self):
@@ -72,4 +81,4 @@ class Laminate:
 
     @property
     def inv_d_matrix(self):
-        return np.linalg.inv(self.d_matrix)
+        return self.inv_abd_matrix[3:, 3:]
