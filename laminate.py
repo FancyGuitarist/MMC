@@ -82,3 +82,29 @@ class Laminate:
     @property
     def inv_d_matrix(self):
         return self.inv_abd_matrix[3:, 3:]
+
+    @property
+    def effective_properties(self):
+        n = len(self.thetas)
+        H = n * self.h
+        a_11 = self.inv_a_matrix[0, 0]
+        a_12 = self.inv_a_matrix[1, 0]
+        a_22 = self.inv_a_matrix[1, 1]
+        a_66 = self.inv_a_matrix[2, 2]
+        eff_E_x = 1 / (H * a_11)
+        eff_E_y = 1 / (H * a_22)
+        eff_G_xy = 1 / (H * a_66)
+        eff_nu_xy = -a_12 / a_11
+        eff_nu_yx = -a_12 / a_22
+        eff_properties = {"E_x": eff_E_x, "E_y": eff_E_y, "G_xy": eff_G_xy, "nu_xy": eff_nu_xy, "nu_yx": eff_nu_yx}
+        return eff_properties
+
+    def display_effective_properties(self):
+        eff_properties = self.effective_properties
+        for key, value in eff_properties.items():
+            if key == "G_xy" or key == "E_x" or key == "E_y":
+                print(f"{key}: {value/1e9:.2f} GPa")
+            else:
+                print(f"{key}: {value:.4f}")
+
+
