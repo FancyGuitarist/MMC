@@ -97,7 +97,7 @@ class CompositeType(StrEnum):
 
 class Composite:
     """
-    Composite Class to solve for the undefined variables in a Composite Material.
+    Composite Class to solve_strains_and_stresses for the undefined variables in a Composite Material.
     Accepts the composite type, the angle of the fibers, the temperature delta and the moisture delta.
     """
 
@@ -198,9 +198,9 @@ class Composite:
 
     def update_variables(self, values: tuple, stress: bool = True) -> list:
         """
-        Update the variables to solve for the undefined variables.
-        If a value is given, remove the corresponding variable from the list of variables to solve.
-        If value is None, returns the symbol for sympy to solve.
+        Update the variables to solve_strains_and_stresses for the undefined variables.
+        If a value is given, remove the corresponding variable from the list of variables to solve_strains_and_stresses.
+        If value is None, returns the symbol for sympy to solve_strains_and_stresses.
         :param values: (sigma_x, sigma_y, tau_xy) or (epsilon_x, epsilon_y, gamma_xy)
         :param stress: True if the values are stresses, False if they are strains
         :return: Updated list of values with symbols or values
@@ -243,7 +243,7 @@ class Composite:
                 total_matrix = total_matrix.row_insert(index, matrix)
         return total_matrix
 
-    def solve(self, strains: tuple, stresses: tuple) -> dict:
+    def solve_strains_and_stresses(self, strains: tuple, stresses: tuple) -> dict:
         """
         Solve for the Composite's undefined variables
         :param strains: epsilon_x (mu_epsilon), epsilon_y (mu_epsilon), gamma_xy (mu_rad)
