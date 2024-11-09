@@ -8,18 +8,6 @@ epsilon_x, epsilon_y, gamma_xy = symbols("epsilon_x, epsilon_y, gamma_xy")
 sigma_x, sigma_y, tau_xy = symbols("sigma_x, sigma_y, tau_xy")
 
 
-def multiple_matmul(*args):
-    """
-    Perform multiple matrix multiplications in given order.
-    :param args: Matrices to multiply
-    :return: Result of the consecutive matrix multiplications
-    """
-    result = args[0]
-    for i in range(1, len(args)):
-        result = np.matmul(result, args[i])
-    return result
-
-
 class ExpansionType(StrEnum):
     """
     Expansion types for expansion coefficients
@@ -157,11 +145,11 @@ class Composite:
         return np.transpose(self.t_matrix)
 
     @property
-    def global_s_matrix(self) -> Matrix:
+    def global_s_matrix(self) -> np.ndarray:
         """
         S Matrix in the global referential.
         """
-        return multiple_matmul(self.t_transposed_matrix, self.composite_type.s_3x3_matrix, self.t_matrix)
+        return self.t_transposed_matrix @ self.composite_type.s_3x3_matrix @ self.t_matrix
 
     @property
     def global_q_matrix(self) -> np.ndarray:
@@ -320,7 +308,7 @@ class Composite:
         return np.array(mec_strains)
 
     def global_to_local_strains(self, values: tuple):
-        return multiple_matmul(self.r_matrix, self.t_matrix, np.linalg.inv(self.r_matrix), values)
+        return self.r_matrix @ self.t_matrix @ np.linalg.inv(self.r_matrix) @ values
 
     def global_to_local_stresses(self, values: tuple):
         return np.matmul(self.t_matrix, values)

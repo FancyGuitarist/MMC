@@ -39,7 +39,10 @@ class TestLaminate(unittest.TestCase):
 
     def test_abd_matrix(self):
         lam = Laminate(thetas=[30, -30, 0], h=0.150, composite_type=CompositeType.Graphite_Epoxy)
-        a_matrix, b_matrix, d_matrix = lam.abd_matrix
+        abd_matrix = lam.abd_matrix
+        a_matrix = abd_matrix[:3, :3]
+        b_matrix = abd_matrix[:3, 3:]
+        d_matrix = abd_matrix[3:, 3:]
         a_matrix = a_matrix / 1e6
         expected_a_matrix = np.array([[51.2, 9.47, 0], [9.47, 8.12, 0], [0, 0, 10.1]])
         expected_b_matrix = np.array([[1416.35, -608.66, -1050.89],
@@ -67,6 +70,3 @@ class TestLaminate(unittest.TestCase):
         self.assertTrue(compare_a.all())
         self.assertTrue(compare_b.all())
         self.assertTrue(compare_d.all())
-
-# [0, 90, 90, 0]
-# [30, -30, 0, 0, -30, 30]

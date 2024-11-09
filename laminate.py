@@ -48,20 +48,18 @@ class Laminate:
             b_matrix = b_matrix + q_matrix * (z[i + 1] ** 2 - z[i] ** 2) / 2
             d_matrix = d_matrix + q_matrix * (z[i + 1] ** 3 - z[i] ** 3) / 3
         self.abd_matrix_cache = a_matrix, b_matrix, d_matrix
-        return a_matrix, b_matrix, d_matrix
+        return np.block([[a_matrix, b_matrix], [b_matrix, d_matrix]])
 
     @property
     def inv_abd_matrix(self):
         if self.inv_abd_cache is not None:
             return self.inv_abd_cache
-        a_matrix, b_matrix, d_matrix = self.abd_matrix
-        abd_matrix = np.block([[a_matrix, b_matrix], [b_matrix, d_matrix]])
-        self.inv_abd_cache = np.linalg.inv(abd_matrix)
+        self.inv_abd_cache = np.linalg.inv(self.abd_matrix)
         return self.inv_abd_cache
 
     @property
     def a_matrix(self):
-        return self.abd_matrix[0]
+        return self.abd_matrix[:3, :3]
 
     @property
     def inv_a_matrix(self):
@@ -69,7 +67,7 @@ class Laminate:
 
     @property
     def b_matrix(self):
-        return self.abd_matrix[1]
+        return self.abd_matrix[:3, 3:]
 
     @property
     def inv_b_matrix(self):
@@ -77,7 +75,7 @@ class Laminate:
 
     @property
     def d_matrix(self):
-        return self.abd_matrix[2]
+        return self.abd_matrix[3:, 3:]
 
     @property
     def inv_d_matrix(self):
