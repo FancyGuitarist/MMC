@@ -246,7 +246,7 @@ class Composite:
     def solve_strains_and_stresses(self, strains: tuple, stresses: tuple) -> dict:
         """
         Solve for the Composite's undefined variables
-        :param strains: epsilon_x (mu_epsilon), epsilon_y (mu_epsilon), gamma_xy (mu_rad)
+        :param strains: epsilon_x (micro_epsilon), epsilon_y (micro_epsilon), gamma_xy (micro_rad)
         :param stresses: sigma_x (MPa), sigma_y (MPa), tau_xy (MPa)
         :return: Dictionary of the solved variables
         """
@@ -261,7 +261,7 @@ class Composite:
         """
         Calculate the third strain component from the given stresses.
         :param stresses: sigma_x (MPa), sigma_y (MPa), tau_xy (MPa)
-        :return: epsilon_3 (mu_epsilon)
+        :return: epsilon_3 (micro_epsilon)
         """
         properties = self.composite_type.properties
         S_13 = -properties['nu_13'] / properties['E1']
@@ -272,7 +272,7 @@ class Composite:
         """
         Calculate the third strain component from the given stresses.
         :param stresses: sigma_x (MPa), sigma_y (MPa), tau_xy (MPa)
-        :return: epsilon_3 (mu_epsilon)
+        :return: epsilon_3 (micro_epsilon)
         """
         beta_3 = self.composite_type.expansion_coeffs(ExpansionType.Hygroscopic)['beta_3']
         alpha_3 = self.composite_type.expansion_coeffs(ExpansionType.Thermal)['alpha_3']
@@ -311,7 +311,7 @@ class Composite:
         return self.r_matrix @ self.t_matrix @ np.linalg.inv(self.r_matrix) @ values
 
     def global_to_local_stresses(self, values: tuple):
-        return np.matmul(self.t_matrix, values)
+        return self.t_matrix @ values
 
     def f_ij_elements(self):
         properties = self.composite_type.safety_properties

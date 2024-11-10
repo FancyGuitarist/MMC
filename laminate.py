@@ -1,10 +1,25 @@
+import sympy
+
 from composite import Composite, CompositeType
-from sympy import symbols
+from sympy import symbols, Eq, solve
+from sympy.matrices import Matrix
 import numpy as np
+from enum import Enum
+
+
+class Variables:
+    eps_x, eps_y, eps_xy = symbols("eps_x, eps_y, eps_xy")
+    kap_x, kap_y, kap_xy = symbols("kap_x, kap_y, kap_xy")
+    N_x, N_y, N_xy = symbols("N_x, N_y, N_xy")
+    M_x, M_y, M_xy = symbols("M_x, M_y, M_xy")
+    default_eps = [eps_x, eps_y, eps_xy]
+    default_kap = [kap_x, kap_y, kap_xy]
+    default_N = [N_x, N_y, N_xy]
+    default_M = [M_x, M_y, M_xy]
 
 
 class Laminate:
-    def __init__(self, thetas: list, composite_type: CompositeType, h: float):
+    def __init__(self, thetas: list, composite_type: CompositeType, h: float = 0.150):
         """
         Laminate class that builds a laminate from a list of angles and a composite type
         :param thetas: list of angles for the laminate layers in degrees
@@ -13,7 +28,7 @@ class Laminate:
         """
         self.thetas = thetas
         self.composite_type = composite_type
-        self.h = h/1000
+        self.h = h / 1000
         self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in thetas]
         self.abd_matrix_cache, self.inv_abd_cache = None, None
 
@@ -97,12 +112,38 @@ class Laminate:
         eff_properties = {"E_x": eff_E_x, "E_y": eff_E_y, "G_xy": eff_G_xy, "nu_xy": eff_nu_xy, "nu_yx": eff_nu_yx}
         return eff_properties
 
+    def get_variables_to_solve(self, values: list):
+        variables = []
+        for value in values:
+            if isinstance(value, sympy.Symbol):
+                variables.append(value)
+        return variables
+
+    def adjust_solution_units(self, solution: dict):
+        results = {}
+        for key, val in solution.items():
+            if key in Variables.default_eps:
+                val *= 1e6
+            if key in Variables.default_N:
+                val /= 1e3
+            results[key] = round(val, 3)
+        return results
+
+    def solve_eps_kap_n_m(self,
+                          epsilons: list[Variables | float] = Variables.default_eps,
+                          kappas: list[Variables | float] = Variables.default_kap,
+                          ns: list[Variables | float] = Variables.default_N,
+                          ms: list[Variables | float] = Variables.default_M):
+        variables_to_solve = self.get_variables_to_solve(epsilons + kappas + ns + ms)
+        eps_kap, n_m = Matrix(epsilons + kappas), Matrix(ns + ms)
+        equation = Eq(Matrix(self.inv_abd_matrix) * n_m, eps_kap)
+        solution = solve(equation, variables_to_solve)
+        return self.adjust_solution_units(solution)
+
     def display_effective_properties(self):
         eff_properties = self.effective_properties
         for key, value in eff_properties.items():
             if key == "G_xy" or key == "E_x" or key == "E_y":
-                print(f"{key}: {value/1e9:.2f} GPa")
+                print(f"{key}: {value / 1e9:.2f} GPa")
             else:
                 print(f"{key}: {value:.4f}")
-
-
