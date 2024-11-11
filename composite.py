@@ -4,8 +4,22 @@ from enum import StrEnum
 from sympy import symbols, Eq, solve
 from sympy.matrices import Matrix
 
-epsilon_x, epsilon_y, gamma_xy = symbols("epsilon_x, epsilon_y, gamma_xy")
-sigma_x, sigma_y, tau_xy = symbols("sigma_x, sigma_y, tau_xy")
+
+class Variables:
+    # For Composites:
+    epsilon_x, epsilon_y, gamma_xy = symbols("epsilon_x, epsilon_y, gamma_xy")
+    sigma_x, sigma_y, tau_xy = symbols("sigma_x, sigma_y, tau_xy")
+    default_strains = [epsilon_x, epsilon_y, gamma_xy]
+    default_stresses = [sigma_x, sigma_y, tau_xy]
+    # For Laminates:
+    eps_x, eps_y, eps_xy = symbols("eps_x, eps_y, eps_xy")
+    kap_x, kap_y, kap_xy = symbols("kap_x, kap_y, kap_xy")
+    N_x, N_y, N_xy = symbols("N_x, N_y, N_xy")
+    M_x, M_y, M_xy = symbols("M_x, M_y, M_xy")
+    default_eps = [eps_x, eps_y, eps_xy]
+    default_kap = [kap_x, kap_y, kap_xy]
+    default_N = [N_x, N_y, N_xy]
+    default_M = [M_x, M_y, M_xy]
 
 
 class ExpansionType(StrEnum):
@@ -114,7 +128,7 @@ class Composite:
         """
         self.angle = np.radians(angle)
         self.composite_type = composite_type
-        self.variables = [epsilon_x, epsilon_y, gamma_xy, sigma_x, sigma_y, tau_xy]
+        self.variables = Variables.default_strains + Variables.default_stresses
         self.variables_to_solve = []
         self.delta_t = delta_t
         self.delta_m = delta_m
@@ -300,7 +314,7 @@ class Composite:
         sigma_h = pressure * r / thickness
         return {'sigma_a': sigma_a / 10 ** 6, 'sigma_h': sigma_h / 10 ** 6}
 
-    def mechanical_strains(self, values: tuple = (epsilon_x, epsilon_y, gamma_xy)):
+    def mechanical_strains(self, values: tuple = (Variables.epsilon_x, Variables.epsilon_y, Variables.gamma_xy)):
         mec_strains = []
         for index, strain in enumerate(values):
             mec_strains.append(strain * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (

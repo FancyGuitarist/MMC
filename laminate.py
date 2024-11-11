@@ -1,21 +1,8 @@
 import sympy
-
-from composite import Composite, CompositeType
-from sympy import symbols, Eq, solve
+from composite import Composite, CompositeType, Variables
+from sympy import Eq, solve
 from sympy.matrices import Matrix
 import numpy as np
-from enum import Enum
-
-
-class Variables:
-    eps_x, eps_y, eps_xy = symbols("eps_x, eps_y, eps_xy")
-    kap_x, kap_y, kap_xy = symbols("kap_x, kap_y, kap_xy")
-    N_x, N_y, N_xy = symbols("N_x, N_y, N_xy")
-    M_x, M_y, M_xy = symbols("M_x, M_y, M_xy")
-    default_eps = [eps_x, eps_y, eps_xy]
-    default_kap = [kap_x, kap_y, kap_xy]
-    default_N = [N_x, N_y, N_xy]
-    default_M = [M_x, M_y, M_xy]
 
 
 class Laminate:
