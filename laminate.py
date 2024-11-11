@@ -1,8 +1,10 @@
 import sympy
+import re
 from composite import Composite, CompositeType, Variables
 from sympy import Eq, solve
 from sympy.matrices import Matrix
 import numpy as np
+import pandas as pd
 
 
 class Laminate:
@@ -18,6 +20,7 @@ class Laminate:
         self.h = h / 1000
         self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in thetas]
         self.abd_matrix_cache, self.inv_abd_cache = None, None
+        self.global_stress_layers_cache = [None, None]
 
     @property
     def q_k(self):
@@ -29,16 +32,20 @@ class Laminate:
                 q_k += composite.global_q_matrix
         return q_k
 
-    @property
-    def abd_matrix(self):
-        if self.abd_matrix_cache is not None:
-            return self.abd_matrix_cache
+    def setup_n_H_z(self):
         n = len(self.thetas)
         H = n * self.h
         z = np.zeros((n + 1))
         z[0] = -H / 2
         for i in range(1, len(z)):
             z[i] = z[i - 1] + self.h
+        return n, H, z
+
+    @property
+    def abd_matrix(self):
+        if self.abd_matrix_cache is not None:
+            return self.abd_matrix_cache
+        n, H, z = self.setup_n_H_z()
 
         a_matrix = np.zeros((3, 3))
         b_matrix = np.zeros((3, 3))
@@ -126,6 +133,39 @@ class Laminate:
         equation = Eq(Matrix(self.inv_abd_matrix) * n_m, eps_kap)
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
+
+    def global_stress_layers(self, epsilons: list, kappas: list):
+        if self.global_stress_layers_cache[0] is not None and self.global_stress_layers_cache[0] == [epsilons, kappas]:
+            return self.global_stress_layers_cache[0]
+        n, H, z = self.setup_n_H_z()
+        eps = Matrix(epsilons) / 1e6
+        kap = Matrix(kappas)
+        global_stress_layers = {}
+
+        for i in range(n):
+            q_matrix = self.composites[i].global_q_matrix
+            eps_kap = eps + kap * z[i]
+            stress_mat = Matrix(Variables.default_stresses)
+            equation = Eq(Matrix(q_matrix) * eps_kap, stress_mat)
+            solved = solve(equation, Variables.default_stresses)
+            global_stress_layers[f"z_{i}"] = {key: round(solved[key]/1e6, 4) for key in solved}
+        self.global_stress_layers_cache = [global_stress_layers, [epsilons, kappas]]
+        return self.global_stress_layers_cache[0]
+
+    def local_stress_layers(self, epsilons: list, kappas: list):
+        global_layers = self.global_stress_layers(epsilons, kappas)
+        sigma_1, sigma_2, tau_12 = Variables.default_local_stresses
+        local_layers = {}
+        for key in global_layers.keys():
+            match = re.search(r"z_(\d+)", key)
+            index = int(match.group(1))
+            t_matrix = self.composites[index].t_matrix
+            global_layer = np.vstack([value for value in global_layers[key].values()])
+            local_layer = t_matrix @ global_layer
+            local_layers[key] = {sigma_1: round(float(local_layer[0]), 4),
+                                 sigma_2: round(float(local_layer[1]), 4),
+                                 tau_12: round(float(local_layer[2]), 4)}
+        return local_layers
 
     def display_effective_properties(self):
         eff_properties = self.effective_properties

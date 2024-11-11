@@ -9,14 +9,16 @@ class Variables:
     # For Composites:
     epsilon_x, epsilon_y, gamma_xy = symbols("epsilon_x, epsilon_y, gamma_xy")
     sigma_x, sigma_y, tau_xy = symbols("sigma_x, sigma_y, tau_xy")
+    sigma_1, sigma_2, tau_12 = symbols("sigma_1, sigma_2, tau_12")
     default_strains = [epsilon_x, epsilon_y, gamma_xy]
     default_stresses = [sigma_x, sigma_y, tau_xy]
+    default_local_stresses = [sigma_1, sigma_2, tau_12]
     # For Laminates:
-    eps_x, eps_y, eps_xy = symbols("eps_x, eps_y, eps_xy")
+    eps_x, eps_y, gam_xy = symbols("eps_x, eps_y, gam_xy")
     kap_x, kap_y, kap_xy = symbols("kap_x, kap_y, kap_xy")
     N_x, N_y, N_xy = symbols("N_x, N_y, N_xy")
     M_x, M_y, M_xy = symbols("M_x, M_y, M_xy")
-    default_eps = [eps_x, eps_y, eps_xy]
+    default_eps = [eps_x, eps_y, gam_xy]
     default_kap = [kap_x, kap_y, kap_xy]
     default_N = [N_x, N_y, N_xy]
     default_M = [M_x, M_y, M_xy]
