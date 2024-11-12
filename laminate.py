@@ -5,6 +5,7 @@ from sympy import Eq, solve
 from sympy.matrices import Matrix
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 
 
 class Laminate:
@@ -21,6 +22,7 @@ class Laminate:
         self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in thetas]
         self.abd_matrix_cache, self.inv_abd_cache = None, None
         self.global_stress_layers_cache = [None, None]
+        self.local_stress_layers_cache = [None, None]
 
     @property
     def q_k(self):
@@ -56,8 +58,8 @@ class Laminate:
             a_matrix = a_matrix + q_matrix * (z[i + 1] - z[i])
             b_matrix = b_matrix + q_matrix * (z[i + 1] ** 2 - z[i] ** 2) / 2
             d_matrix = d_matrix + q_matrix * (z[i + 1] ** 3 - z[i] ** 3) / 3
-        self.abd_matrix_cache = a_matrix, b_matrix, d_matrix
-        return np.block([[a_matrix, b_matrix], [b_matrix, d_matrix]])
+        self.abd_matrix_cache = np.block([[a_matrix, b_matrix], [b_matrix, d_matrix]])
+        return self.abd_matrix_cache
 
     @property
     def inv_abd_matrix(self):
@@ -140,32 +142,179 @@ class Laminate:
         n, H, z = self.setup_n_H_z()
         eps = Matrix(epsilons) / 1e6
         kap = Matrix(kappas)
-        global_stress_layers = {}
+        stress_mat = Matrix(Variables.default_stresses)
+        global_stress_layers = defaultdict(dict)
 
         for i in range(n):
             q_matrix = self.composites[i].global_q_matrix
-            eps_kap = eps + kap * z[i]
-            stress_mat = Matrix(Variables.default_stresses)
-            equation = Eq(Matrix(q_matrix) * eps_kap, stress_mat)
-            solved = solve(equation, Variables.default_stresses)
-            global_stress_layers[f"z_{i}"] = {key: round(solved[key]/1e6, 4) for key in solved}
-        self.global_stress_layers_cache = [global_stress_layers, [epsilons, kappas]]
+            eps_kap_top = eps + kap * z[i]
+            eps_kap_bot = eps + kap * z[i + 1]
+            equation_top = Eq(Matrix(q_matrix) * eps_kap_top, stress_mat)
+            equation_bot = Eq(Matrix(q_matrix) * eps_kap_bot, stress_mat)
+            solved_top = solve(equation_top, Variables.default_stresses)
+            solved_bot = solve(equation_bot, Variables.default_stresses)
+            global_stress_layers[f"z_{i}"]["Top"] = {key: round(solved_top[key] / 1e6, 4) for key in solved_top}
+            global_stress_layers[f"z_{i}"]["Bottom"] = {key: round(solved_bot[key] / 1e6, 4) for key in solved_bot}
+        self.global_stress_layers_cache = [dict(global_stress_layers), [epsilons, kappas]]
         return self.global_stress_layers_cache[0]
 
     def local_stress_layers(self, epsilons: list, kappas: list):
+        if self.local_stress_layers_cache[0] is not None and self.local_stress_layers_cache[0] == [epsilons, kappas]:
+            return self.local_stress_layers_cache[0]
         global_layers = self.global_stress_layers(epsilons, kappas)
         sigma_1, sigma_2, tau_12 = Variables.default_local_stresses
-        local_layers = {}
+        local_layers = defaultdict(dict)
         for key in global_layers.keys():
             match = re.search(r"z_(\d+)", key)
             index = int(match.group(1))
             t_matrix = self.composites[index].t_matrix
-            global_layer = np.vstack([value for value in global_layers[key].values()])
-            local_layer = t_matrix @ global_layer
-            local_layers[key] = {sigma_1: round(float(local_layer[0]), 4),
-                                 sigma_2: round(float(local_layer[1]), 4),
-                                 tau_12: round(float(local_layer[2]), 4)}
-        return local_layers
+            global_layer_top = np.vstack([value for value in global_layers[key]["Top"].values()])
+            global_layer_bot = np.vstack([value for value in global_layers[key]["Bottom"].values()])
+            local_layer_top = t_matrix @ global_layer_top
+            local_layers[key]["Top"] = {sigma_1: round(float(local_layer_top[0]), 4),
+                                        sigma_2: round(float(local_layer_top[1]), 4),
+                                        tau_12: round(float(local_layer_top[2]), 4)}
+            local_layer_bot = t_matrix @ global_layer_bot
+            local_layers[key]["Bottom"] = {sigma_1: round(float(local_layer_bot[0]), 4),
+                                           sigma_2: round(float(local_layer_bot[1]), 4),
+                                           tau_12: round(float(local_layer_bot[2]), 4)}
+        self.local_stress_layers_cache = [dict(local_layers), [epsilons, kappas]]
+        return self.local_stress_layers_cache[0]
+
+    def global_strain_layers(self, epsilons: list, kappas: list):
+        n, H, z = self.setup_n_H_z()
+        eps = Matrix(epsilons) / 1e6
+        kap = Matrix(kappas)
+        epsilon_x, epsilon_y, gamma_xy = Variables.default_strains
+        global_strain_layers = defaultdict(dict)
+
+        for i in range(n):
+            eps_kap_top = (eps + kap * z[i]) * 1e6
+            eps_kap_bot = (eps + kap * z[i + 1]) * 1e6
+            global_strain_layers[f"z_{i}"]["Top"] = {epsilon_x: eps_kap_top[0],
+                                                     epsilon_y: eps_kap_top[1],
+                                                     gamma_xy: eps_kap_top[2]}
+            global_strain_layers[f"z_{i}"]["Bottom"] = {epsilon_x: eps_kap_bot[0],
+                                                        epsilon_y: eps_kap_bot[1],
+                                                        gamma_xy: eps_kap_bot[2]}
+        return dict(global_strain_layers)
+
+    def local_strain_layers(self, epsilons: list, kappas: list):
+        global_layers = self.global_strain_layers(epsilons, kappas)
+        epsilon_1, epsilon_2, gamma_12 = Variables.default_local_strains
+        local_layers = defaultdict(dict)
+        for key in global_layers.keys():
+            match = re.search(r"z_(\d+)", key)
+            index = int(match.group(1))
+            t_matrix = self.composites[index].t_matrix
+            r_matrix = self.composites[index].r_matrix
+            global_layer_top = np.vstack([value for value in global_layers[key]["Top"].values()])
+            global_layer_bot = np.vstack([value for value in global_layers[key]["Bottom"].values()])
+            local_layer_top = r_matrix @ t_matrix @ np.linalg.inv(r_matrix) @ global_layer_top
+            local_layers[key]["Top"] = {epsilon_1: round(float(local_layer_top[0]), 4),
+                                        epsilon_2: round(float(local_layer_top[1]), 4),
+                                        gamma_12: round(float(local_layer_top[2]), 4)}
+            local_layer_bot = r_matrix @ t_matrix @ np.linalg.inv(r_matrix) @ global_layer_bot
+            local_layers[key]["Bottom"] = {epsilon_1: round(float(local_layer_bot[0]), 4),
+                                           epsilon_2: round(float(local_layer_bot[1]), 4),
+                                           gamma_12: round(float(local_layer_bot[2]), 4)}
+        return dict(local_layers)
+
+    def global_stress_layer_table(self, epsilons: list, kappas: list, display: bool = True, save_name: str = None):
+        sigma_x, sigma_y, tau_xy = Variables.default_stresses
+        global_stresses = self.global_stress_layers(epsilons, kappas)
+        rows = []
+        for i in range(len(self.composites)):
+            key = f'z_{i}'
+            row = {
+                'z': f'{i}',
+                'Top sigma_x': global_stresses[key]["Top"][sigma_x],
+                'Top sigma_y': global_stresses[key]["Top"][sigma_y],
+                'Top tau_xy': global_stresses[key]["Top"][tau_xy],
+
+                'Bottom sigma_x': global_stresses[key]["Bottom"][sigma_x],
+                'Bottom sigma_y': global_stresses[key]["Bottom"][sigma_y],
+                'Bottom tau_xy': global_stresses[key]["Bottom"][tau_xy],
+            }
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        if display:
+            print(df)
+        if save_name is not None:
+            df.to_csv(f"{save_name}.csv")
+        return df
+
+    def global_strain_layer_table(self, epsilons: list, kappas: list, display: bool = True, save_name: str = None):
+        epsilon_x, epsilon_y, gamma_xy = Variables.default_strains
+        global_strains = self.global_strain_layers(epsilons, kappas)
+        rows = []
+        for i in range(len(self.composites)):
+            key = f'z_{i}'
+            row = {
+                'z': f'{i}',
+                'Top epsilon_x': global_strains[key]["Top"][epsilon_x],
+                'Top epsilon_y': global_strains[key]["Top"][epsilon_y],
+                'Top gamma_xy': global_strains[key]["Top"][gamma_xy],
+
+                'Bottom epsilon_x': global_strains[key]["Bottom"][epsilon_x],
+                'Bottom epsilon_y': global_strains[key]["Bottom"][epsilon_y],
+                'Bottom gamma_xy': global_strains[key]["Bottom"][gamma_xy],
+            }
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        if display:
+            print(df)
+        if save_name is not None:
+            df.to_csv(f"{save_name}.csv")
+        return df
+
+    def local_stress_layer_table(self, epsilons: list, kappas: list, display: bool = True, save_name: str = None):
+        sigma_1, sigma_2, tau_12 = Variables.default_local_stresses
+        local_stresses = self.local_stress_layers(epsilons, kappas)
+        rows = []
+        for i in range(len(self.composites)):
+            key = f'z_{i}'
+            row = {
+                'z': f'{i}',
+                'Top sigma_1': local_stresses[key]["Top"][sigma_1],
+                'Top sigma_2': local_stresses[key]["Top"][sigma_2],
+                'Top tau_12': local_stresses[key]["Top"][tau_12],
+
+                'Bottom sigma_1': local_stresses[key]["Bottom"][sigma_1],
+                'Bottom sigma_2': local_stresses[key]["Bottom"][sigma_2],
+                'Bottom tau_12': local_stresses[key]["Bottom"][tau_12],
+            }
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        if display:
+            print(df)
+        if save_name is not None:
+            df.to_csv(f"{save_name}.csv")
+        return df
+
+    def local_strain_layer_table(self, epsilons: list, kappas: list, display: bool = True, save_name: str = None):
+        epsilon_1, epsilon_2, gamma_12 = Variables.default_local_strains
+        local_strains = self.local_strain_layers(epsilons, kappas)
+        rows = []
+        for i in range(len(self.composites)):
+            key = f'z_{i}'
+            row = {
+                'z': f'{i}',
+                'Top epsilon_1': local_strains[key]["Top"][epsilon_1],
+                'Top epsilon_2': local_strains[key]["Top"][epsilon_2],
+                'Top gamma_12': local_strains[key]["Top"][gamma_12],
+
+                'Bottom epsilon_1': local_strains[key]["Bottom"][epsilon_1],
+                'Bottom epsilon_2': local_strains[key]["Bottom"][epsilon_2],
+                'Bottom gamma_12': local_strains[key]["Bottom"][gamma_12],
+            }
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        if display:
+            print(df)
+        if save_name is not None:
+            df.to_csv(f"{save_name}.csv")
+        return df
 
     def display_effective_properties(self):
         eff_properties = self.effective_properties

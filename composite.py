@@ -8,9 +8,11 @@ from sympy.matrices import Matrix
 class Variables:
     # For Composites:
     epsilon_x, epsilon_y, gamma_xy = symbols("epsilon_x, epsilon_y, gamma_xy")
+    epsilon_1, epsilon_2, gamma_12 = symbols("epsilon_1, epsilon_2, gamma_12")
     sigma_x, sigma_y, tau_xy = symbols("sigma_x, sigma_y, tau_xy")
     sigma_1, sigma_2, tau_12 = symbols("sigma_1, sigma_2, tau_12")
     default_strains = [epsilon_x, epsilon_y, gamma_xy]
+    default_local_strains = [epsilon_1, epsilon_2, gamma_12]
     default_stresses = [sigma_x, sigma_y, tau_xy]
     default_local_stresses = [sigma_1, sigma_2, tau_12]
     # For Laminates:
