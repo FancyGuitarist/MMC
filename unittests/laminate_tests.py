@@ -102,6 +102,15 @@ class TestLaminate(unittest.TestCase):
         self.assertTrue(math.isclose(solved[Variables.eps_y], expected[Variables.eps_y] * 1e6, abs_tol=abs_tol))
         self.assertTrue(math.isclose(solved[Variables.kap_x], expected[Variables.kap_x], abs_tol=abs_tol))
 
+    def test_laminate_thermal_coefficients(self):
+        lam = Laminate(thetas=[0, 60], composite_type=CompositeType.Graphite_Epoxy, delta_t=150)
+        thermal_coeffs = lam.laminate_expansion_coefficients[0]
+        expected = np.array([46.445, 63.314, -14.609, 0.001898, -0.001898, -0.001096])
+        compare_ns = np.round(thermal_coeffs[:3], 3) == np.round(expected[:3], 3)
+        compare_ms = np.round(thermal_coeffs[3:], 5) == np.round(expected[3:], 5)
+        self.assertTrue(compare_ns.all())
+        self.assertTrue(compare_ms.all())
+
 
 class TestLaminateAngles(unittest.TestCase):
     def test_plus_minus(self):

@@ -83,7 +83,8 @@ class LaminateAngles:
 
 
 class Laminate:
-    def __init__(self, thetas: LaminateAngles | list, composite_type: CompositeType, h: float = 0.150):
+    def __init__(self, thetas: LaminateAngles | list, composite_type: CompositeType, h: float = 0.150, delta_t: float = 0,
+                 delta_m: float = 0):
         """
         Laminate class that builds a laminate from a list of angles and a composite type
         :param thetas: list of angles for the laminate layers in degrees
@@ -93,8 +94,9 @@ class Laminate:
         self.thetas = thetas.get_angles_list() if isinstance(thetas, LaminateAngles) else thetas
         self.composite_type = composite_type
         self.h = h / 1000
+        self.delta_t, self.delta_m = delta_t, delta_m
         self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in self.thetas]
-        self.abd_matrix_cache, self.inv_abd_cache = None, None
+        self.n_H_z_cache, self.abd_matrix_cache, self.inv_abd_cache = None, None, None
         self.global_stress_layers_cache = [None, None]
         self.local_stress_layers_cache = [None, None]
 
@@ -109,13 +111,16 @@ class Laminate:
         return q_k
 
     def setup_n_H_z(self):
+        if self.n_H_z_cache is not None:
+            return self.n_H_z_cache
         n = len(self.thetas)
         H = n * self.h
         z = np.zeros((n + 1))
         z[0] = -H / 2
         for i in range(1, len(z)):
             z[i] = z[i - 1] + self.h
-        return n, H, z
+        self.n_H_z_cache = n, H, z
+        return self.n_H_z_cache
 
     @property
     def abd_matrix(self):
@@ -181,6 +186,41 @@ class Laminate:
         eff_nu_yx = -a_12 / a_22
         eff_properties = {"E_x": eff_E_x, "E_y": eff_E_y, "G_xy": eff_G_xy, "nu_xy": eff_nu_xy, "nu_yx": eff_nu_yx}
         return eff_properties
+
+    def kth_expansion_coefficients(self, q_matrix: np.ndarray, expansion_coefffs: np.ndarray, zs: tuple):
+        z1, z0 = zs
+        z1_z0 = z1 - z0
+        z1_z0_sq = z1 ** 2 - z0 ** 2
+        coeff_xk, coeff_yk, coeff_xyk = expansion_coefffs[0], expansion_coefffs[1], expansion_coefffs[2]
+        thermal_1 = (q_matrix[0, 0] * coeff_xk) + (q_matrix[0, 1] * coeff_yk) + (q_matrix[0, 2] * coeff_xyk)
+        thermal_2 = (q_matrix[1, 0] * coeff_xk) + (q_matrix[1, 1] * coeff_yk) + (q_matrix[1, 2] * coeff_xyk)
+        thermal_3 = (q_matrix[2, 0] * coeff_xk) + (q_matrix[2, 1] * coeff_yk) + (q_matrix[2, 2] * coeff_xyk)
+        N_xk = thermal_1 * z1_z0
+        N_yk = thermal_2 * z1_z0
+        N_xyk = thermal_3 * z1_z0
+        M_xk = 0.5 * thermal_1 * z1_z0_sq
+        M_yk = 0.5 * thermal_2 * z1_z0_sq
+        M_xyk = 0.5 * thermal_3 * z1_z0_sq
+        return np.array([N_xk, N_yk, N_xyk, M_xk, M_yk, M_xyk])
+
+    @property
+    def laminate_expansion_coefficients(self):
+        n, H, z = self.setup_n_H_z()
+        thermal_matrix = np.array([0, 0, 0, 0, 0, 0], dtype=float)
+        hygroscopic_matrix = np.array([0, 0, 0, 0, 0, 0], dtype=float)
+        for k in range(n):
+            if self.delta_m == 0 and self.delta_t == 0:
+                break
+            composite_k = self.composites[k]
+            q_matrix = composite_k.global_q_matrix
+            zs = z[k + 1], z[k]
+            if self.delta_t != 0:
+                thermal_coeffs = composite_k.global_thermal_coeffs
+                thermal_matrix += self.kth_expansion_coefficients(q_matrix, thermal_coeffs, zs)
+            if self.delta_m != 0:
+                hygroscopic_coeffs = composite_k.global_hygroscopic_coeffs
+                hygroscopic_matrix += self.kth_expansion_coefficients(q_matrix, hygroscopic_coeffs, zs)
+        return thermal_matrix, hygroscopic_matrix
 
     def get_variables_to_solve(self, values: list):
         variables = []
