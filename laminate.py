@@ -8,18 +8,92 @@ import pandas as pd
 from collections import defaultdict
 
 
+class LaminateAngles:
+    def __init__(self, angles_str: str):
+        """
+        LaminateAngles class that parses a string of angles into a list of angles.
+
+        Syntax:
+        ± : plus or minus, ¬ : non-symmetrical, nS : n repeats with symmetry, _k : repeat character k times
+        example:
+        "[0_2, ±45, ¬90]S" -> [0, 0, 45, -45, 90, -45, 45, 0, 0]
+        :param angles_str: string of angles separated by commas
+        :returns: list of angles
+        """
+        self.angles_str = angles_str
+
+    def get_angles_list(self) -> list:
+        # Step 1: Extract the main pattern and check for symmetry
+        main_pattern = r"\[(.+)\](\d*)(S?)"
+        main_match = re.match(main_pattern, self.angles_str)
+        if not main_match:
+            raise ValueError("Invalid angles string format")
+
+        numbers_part, n_global_repeats, symmetry = main_match.groups()
+        n_global_repeats = int(n_global_repeats) if n_global_repeats else 1
+
+        # Step 2: Split the content inside brackets by commas and process each part
+        segments = numbers_part.split(',')
+        result_sequence = []
+        single_symmetry, non_sym_len = False, None
+
+        for segment in segments:
+            # Step 3: Handle each segment like ±45, 90_2, or 0
+            pattern = r"([¬]?\s*[±]?\d+)(?:_(\d+))?"
+            match = re.match(pattern, segment.strip())
+            if not match:
+                continue
+
+            value_str, repeat_count = match.groups()
+            value = int(value_str.lstrip('¬').lstrip('±'))
+
+            # Determine if the value has a ± sign
+            if '±' in value_str:
+                sequence = [value, -value]
+            else:
+                sequence = [value]
+
+            if '¬' in value_str:
+                single_symmetry = True
+                non_sym_len = len(sequence)
+
+            # Repeat the sequence based on the repeat count (default to 1 if not provided)
+            repeat_count = int(repeat_count) if repeat_count else 1
+            expanded_sequence = sequence * repeat_count
+
+            # Append the expanded sequence to the result
+            result_sequence.extend(expanded_sequence)
+
+        # Step 4: If 'S' is present, make the sequence symmetrical
+        if symmetry:
+            if single_symmetry and n_global_repeats == 1:
+                cut_sequence = result_sequence[:-non_sym_len]
+                non_sym_sequence = result_sequence[len(cut_sequence):]
+                symmetrical_sequence = cut_sequence + non_sym_sequence + cut_sequence[::-1]
+            elif not single_symmetry and n_global_repeats >= 1:
+                repeated_sequence = result_sequence * int(n_global_repeats)
+                symmetrical_sequence = repeated_sequence + repeated_sequence[::-1]
+            else:
+                raise ValueError("Invalid format, cannot have both non-symmetrical (¬) and multiple symmetries (kS)")
+            final_sequence = symmetrical_sequence
+        else:
+            final_sequence = result_sequence
+
+        return final_sequence
+
+
 class Laminate:
-    def __init__(self, thetas: list, composite_type: CompositeType, h: float = 0.150):
+    def __init__(self, thetas: LaminateAngles | list, composite_type: CompositeType, h: float = 0.150):
         """
         Laminate class that builds a laminate from a list of angles and a composite type
         :param thetas: list of angles for the laminate layers in degrees
         :param composite_type: CompositeType
         :param h: Thickness of the laminate in mm
         """
-        self.thetas = thetas
+        self.thetas = thetas.get_angles_list() if isinstance(thetas, LaminateAngles) else thetas
         self.composite_type = composite_type
         self.h = h / 1000
-        self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in thetas]
+        self.composites = [Composite(angle=theta, composite_type=composite_type) for theta in self.thetas]
         self.abd_matrix_cache, self.inv_abd_cache = None, None
         self.global_stress_layers_cache = [None, None]
         self.local_stress_layers_cache = [None, None]

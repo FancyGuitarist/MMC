@@ -1,6 +1,6 @@
 import unittest
 import math
-from laminate import Laminate, Variables
+from laminate import Laminate, Variables, LaminateAngles
 from composite import CompositeType
 import numpy as np
 
@@ -101,3 +101,65 @@ class TestLaminate(unittest.TestCase):
         self.assertTrue(math.isclose(solved[Variables.eps_x], expected[Variables.eps_x] * 1e6, abs_tol=abs_tol))
         self.assertTrue(math.isclose(solved[Variables.eps_y], expected[Variables.eps_y] * 1e6, abs_tol=abs_tol))
         self.assertTrue(math.isclose(solved[Variables.kap_x], expected[Variables.kap_x], abs_tol=abs_tol))
+
+
+class TestLaminateAngles(unittest.TestCase):
+    def test_plus_minus(self):
+        angles = "[0, ±45]"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, -45])
+
+    def test_symmetry(self):
+        angles = "[0, 45, 90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, 90, 90, 45, 0])
+
+    def test_symmetry_w_plus_minus(self):
+        angles = "[0, ±45, 90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, -45, 90, 90, -45, 45, 0])
+
+    def test_non_symmetry(self):
+        angles = "[0, 45, ¬90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, 90, 45, 0])
+
+    def test_non_symmetry_w_plus_minus(self):
+        angles = "[0, ±45, ¬90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, -45, 90, -45, 45, 0])
+
+    def test_repeat(self):
+        angles = "[0, 45_3, 90]"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, 45, 45, 90])
+
+    def test_repeat_w_plus_minus(self):
+        angles = "[0, ±45_3, 90]"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, -45, 45, -45, 45, -45, 90])
+
+    def test_repeat_w_symmetry(self):
+        angles = "[0, 45_3, 90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, 45, 45, 90, 90, 45, 45, 45, 0])
+
+    def test_repeat_w_symmetry_and_plus_minus(self):
+        angles = "[0, ±45_2, 90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, -45, 45, -45, 90, 90, -45, 45, -45, 45, 0])
+
+    def test_repeat_w_non_symmetry_and_plus_minus(self):
+        angles = "[0, ±45_2, ¬90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, -45, 45, -45, 90, -45, 45, -45, 45, 0])
+
+    def test_multiple_symmetries(self):
+        angles = "[0, 45, 90]2S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, 90, 0, 45, 90, 90, 45, 0, 90, 45, 0])
+
+    def test_multiple_symmetries_w_non_symmetry(self):
+        angles = "[0, 45, ¬90]2S"
+        lam_angles = LaminateAngles(angles)
+        self.assertRaises(ValueError, lam_angles.get_angles_list)
