@@ -121,6 +121,30 @@ class TestLaminate(unittest.TestCase):
         self.assertEqual(res[Variables.eps_y], expected[Variables.eps_y])
         self.assertEqual(res[Variables.gam_xy], expected[Variables.gam_xy])
 
+    def test_solve_residual_stresses(self):
+        lam = Laminate(thetas=LaminateAngles("[±30]S"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
+        solution = lam.solve_eps_kap_n_m(ns=[0, 0, 0], ms=[0, 0, 0])
+        residual_stresses = lam.solve_residual_stresses(solution)
+        expected = {30: {Variables.sigma_x: 0.0, Variables.sigma_y: 0.0, Variables.tau_xy: -25.063},
+                    -30: {Variables.sigma_x: 0.0, Variables.sigma_y: 0.0, Variables.tau_xy: 25.063}}
+        abs_tol = 1 / 1e2
+        for key in expected:
+            for var in expected[key]:
+                self.assertTrue(math.isclose(residual_stresses[key][var], expected[key][var], abs_tol=abs_tol))
+
+    def test_local_residual_stresses(self):
+        # Still need a demonstration to build unittest, for now just checking if function outputs something
+        lam = Laminate(thetas=LaminateAngles("[±30]S"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
+        solution = lam.solve_eps_kap_n_m(ns=[0, 0, 0], ms=[0, 0, 0])
+        local_residual_stresses = lam.local_residual_stresses(solution)
+        print(local_residual_stresses)
+
+    @unittest.skip("No tests for plotting, only for demonstration")
+    def test_plot_curvature(self):
+        lam = Laminate(thetas=LaminateAngles("[0_2, 90_2]"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
+        solution = lam.solve_eps_kap_n_m(ns=[0, 0, 0], ms=[0, 0, 0])
+        lam.plot_curvature(solution)
+
 
 class TestLaminateAngles(unittest.TestCase):
     def test_plus_minus(self):

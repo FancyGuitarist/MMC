@@ -1,11 +1,13 @@
 import sympy
 import re
-from composite import Composite, CompositeType, Variables
+from composite import *
 from sympy import Eq, solve
 from sympy.matrices import Matrix
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class LaminateAngles:
@@ -253,6 +255,45 @@ class Laminate:
         equation = Eq(Matrix(self.inv_abd_matrix) * n_m, eps_kap)
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
+
+    def solve_residual_stresses(self, eps_kap: dict):
+        eps_mat = Matrix([eps_kap[key] * 1e-6 for key in Variables.default_eps])
+        results = defaultdict(dict)
+        for composite in self.composites:
+            alpha_mat = Matrix(composite.global_thermal_coeffs[:3])
+            total_eps = eps_mat - alpha_mat * self.delta_t
+            equation = Eq(Matrix(composite.global_q_matrix) * total_eps, Matrix(Variables.default_stresses))
+            solution = solve(equation, Variables.default_stresses)
+            results[int(round(np.degrees(composite.angle)))] = {key: round(value / 1e6, 3) for key, value in solution.items()}
+        return dict(results)
+
+    def local_residual_stresses(self, eps_kap: dict):
+        global_results = self.solve_residual_stresses(eps_kap)
+        local_results = defaultdict(dict)
+        for index, theta in enumerate(self.thetas):
+            composite = self.composites[index]
+            t_matrix = composite.t_matrix
+            global_stresses = np.vstack([value for value in global_results[theta].values()])
+            local_stresses = t_matrix @ global_stresses
+            local_results[theta] = {key: round(float(value), 3) for key, value in zip(Variables.default_local_stresses, local_stresses)}
+        return dict(local_results)
+
+    def curvature(self, x: np.ndarray, y: np.ndarray, eps_kap: dict):
+        kap_x, kap_y, kap_xy = eps_kap[Variables.kap_x], eps_kap[Variables.kap_y], eps_kap[Variables.kap_xy]
+        return -0.5 * (kap_x * y ** 2 + kap_y * x ** 2 + 2 * kap_xy * x * y)
+
+    def plot_curvature(self, eps_kap: dict):
+        x = y = np.linspace(-0.2, 0.2, 100)
+        X, Y = np.meshgrid(x, y)
+        Z = self.curvature(X, Y, eps_kap)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(X, Y, Z, cmap='viridis')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        plt.show()
+        print(f"Max curvature: {np.max(Z):.4f}")
 
     def global_stress_layers(self, epsilons: list, kappas: list):
         if self.global_stress_layers_cache[0] is not None and self.global_stress_layers_cache[0] == [epsilons, kappas]:
