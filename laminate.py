@@ -282,8 +282,10 @@ class Laminate:
         kap_x, kap_y, kap_xy = eps_kap[Variables.kap_x], eps_kap[Variables.kap_y], eps_kap[Variables.kap_xy]
         return -0.5 * (kap_x * y ** 2 + kap_y * x ** 2 + 2 * kap_xy * x * y)
 
-    def plot_curvature(self, eps_kap: dict):
-        x = y = np.linspace(-0.2, 0.2, 100)
+    def plot_curvature(self, eps_kap: dict, plate_dimensions: tuple = (0.2, 0.2)):
+        length, width = plate_dimensions
+        x = np.linspace(-length, length, 100)
+        y = np.linspace(-width, width, 100)
         X, Y = np.meshgrid(x, y)
         Z = self.curvature(X, Y, eps_kap)
         fig = plt.figure()
