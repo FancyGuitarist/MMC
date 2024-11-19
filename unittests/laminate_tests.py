@@ -111,6 +111,16 @@ class TestLaminate(unittest.TestCase):
         self.assertTrue(compare_ns.all())
         self.assertTrue(compare_ms.all())
 
+    def test_solver_w_delta_t(self):
+        lam = Laminate(thetas=LaminateAngles("[±30]S"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
+        solution = lam.solve_eps_kap_n_m(ns=[0, 0, 0], ms=[0, 0, 0])
+        expected = {Variables.eps_x: 650.1, Variables.eps_y: -2638.6, Variables.gam_xy: 0.0}
+        res = {key: round(solution[key]) for key in solution}
+        expected = {key: round(expected[key]) for key in expected}
+        self.assertEqual(res[Variables.eps_x], expected[Variables.eps_x])
+        self.assertEqual(res[Variables.eps_y], expected[Variables.eps_y])
+        self.assertEqual(res[Variables.gam_xy], expected[Variables.gam_xy])
+
 
 class TestLaminateAngles(unittest.TestCase):
     def test_plus_minus(self):

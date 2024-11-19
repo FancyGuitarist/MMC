@@ -90,6 +90,8 @@ class Laminate:
         :param thetas: list of angles for the laminate layers in degrees
         :param composite_type: CompositeType
         :param h: Thickness of the laminate in mm
+        :param delta_t: Temperature change in Celsius
+        :param delta_m: Moisture change in percentage
         """
         self.thetas = thetas.get_angles_list() if isinstance(thetas, LaminateAngles) else thetas
         self.composite_type = composite_type
@@ -245,7 +247,9 @@ class Laminate:
                           ns: list[Variables | float] = Variables.default_N,
                           ms: list[Variables | float] = Variables.default_M):
         variables_to_solve = self.get_variables_to_solve(epsilons + kappas + ns + ms)
+        thermal_matrix, hygroscopic_matrix = self.laminate_expansion_coefficients
         eps_kap, n_m = Matrix(epsilons + kappas), Matrix(ns + ms)
+        n_m = n_m + Matrix(thermal_matrix) * self.delta_t + Matrix(hygroscopic_matrix) * self.delta_m
         equation = Eq(Matrix(self.inv_abd_matrix) * n_m, eps_kap)
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
