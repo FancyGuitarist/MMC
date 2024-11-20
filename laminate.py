@@ -280,6 +280,32 @@ class Laminate:
             pressures[angle] = max(Matrix(p) / 1e6)
         return dict(pressures)
 
+    def failure_pressure_tsai_wu(self, d: float):
+        laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
+        pressures = defaultdict(dict)
+        p = symbols('p')
+        r = d / 2
+        n_ms = Matrix([p * r * 0.5, p * r, 0, 0, 0, 0])
+        eps_kap = Matrix(self.inv_abd_matrix) * (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t)
+        for comp in self.composites:
+            angle = int(round(np.degrees(comp.angle)))
+            if angle in pressures:
+                continue
+            p = symbols('p')
+            comp_thermal_coeffs = Matrix(comp.global_thermal_coeffs[:3])
+            sigmas = Matrix(comp.global_q_matrix) * (Matrix(eps_kap[:3]) - (comp_thermal_coeffs * self.delta_t))
+            local_sigmas = Matrix(comp.t_matrix) * sigmas
+            sigma_1, sigma_2, tau_12 = local_sigmas[0], local_sigmas[1], local_sigmas[2]
+            f_ijs = comp.f_ij_elements()
+            a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
+                 - 0.5 * sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
+            b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
+            eq2 = Eq(1, a + b)
+            p = solve(eq2, p)
+            pressures[angle] = max(Matrix(p) / 1e6)
+        return dict(pressures)
+
+
     def solve_residual_stresses(self, eps_kap: dict):
         eps_mat = Matrix([eps_kap[key] * 1e-6 for key in Variables.default_eps])
         results = defaultdict(dict)
