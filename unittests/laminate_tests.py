@@ -1,6 +1,6 @@
 import unittest
 import math
-from laminate import Laminate, Variables, LaminateAngles
+from laminate import Laminate, Variables, LaminateAngles, FailureCriteria
 from composite import CompositeType
 import numpy as np
 
@@ -147,7 +147,7 @@ class TestLaminate(unittest.TestCase):
 
     def test_pressure_failure_tsai_hill(self):
         lam = Laminate(thetas=LaminateAngles("[±60_6]S"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
-        pressures = lam.failure_pressure_tsai_hill(d=0.6)
+        pressures = lam.failure_pressure_criteria(d=0.6, criteria=FailureCriteria.TsaiHill)
         expected = {60: 1.81564673079054, -60: 1.81564673079054}
         self.assertTrue(math.isclose(pressures[60], expected[60], abs_tol=1/1e2))
         self.assertTrue(math.isclose(pressures[-60], expected[-60], abs_tol=1/1e2))

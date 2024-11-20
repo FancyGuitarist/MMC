@@ -8,6 +8,13 @@ import pandas as pd
 from collections import defaultdict
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from enum import StrEnum
+
+
+class FailureCriteria(StrEnum):
+    TsaiHill = "Tsai-Hill"
+    TsaiWu = "Tsai-Wu"
+    MaxCriteria = "Maximum Stress Criteria"
 
 
 class LaminateAngles:
@@ -256,31 +263,7 @@ class Laminate:
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
 
-    def failure_pressure_tsai_hill(self, d: float):
-        laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
-        pressures = defaultdict(dict)
-        p = symbols('p')
-        r = d / 2
-        n_ms = Matrix([p * r * 0.5, p * r, 0, 0, 0, 0])
-        eps_kap = Matrix(self.inv_abd_matrix) * (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t)
-        for comp in self.composites:
-            angle = int(round(np.degrees(comp.angle)))
-            if angle in pressures:
-                continue
-            p = symbols('p')
-            comp_thermal_coeffs = Matrix(comp.global_thermal_coeffs[:3])
-            sigmas = Matrix(comp.global_q_matrix) * (Matrix(eps_kap[:3]) - (comp_thermal_coeffs * self.delta_t))
-            local_sigmas = Matrix(comp.t_matrix) * sigmas
-            properties = comp.composite_type.safety_properties
-            sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
-            sigma_1, sigma_2, tau_12 = local_sigmas[0], local_sigmas[1], local_sigmas[2]
-            equation = Eq(1, ((sigma_1 / sigma_1t) ** 2 + (sigma_2 / sigma_2t) ** 2 - (sigma_1 * sigma_2 / sigma_1t ** 2) + (
-                        tau_12 / tau_12f) ** 2))
-            p = solve(equation, p)
-            pressures[angle] = max(Matrix(p) / 1e6)
-        return dict(pressures)
-
-    def failure_pressure_tsai_wu(self, d: float):
+    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria):
         laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
         pressures = defaultdict(dict)
         p = symbols('p')
@@ -296,13 +279,34 @@ class Laminate:
             sigmas = Matrix(comp.global_q_matrix) * (Matrix(eps_kap[:3]) - (comp_thermal_coeffs * self.delta_t))
             local_sigmas = Matrix(comp.t_matrix) * sigmas
             sigma_1, sigma_2, tau_12 = local_sigmas[0], local_sigmas[1], local_sigmas[2]
-            f_ijs = comp.f_ij_elements()
-            a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
-                 - 0.5 * sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
-            b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
-            eq2 = Eq(1, a + b)
-            p = solve(eq2, p)
-            pressures[angle] = max(Matrix(p) / 1e6)
+            if criteria == FailureCriteria.TsaiHill:
+                properties = comp.composite_type.safety_properties
+                sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
+                equation = Eq(1, (
+                            (sigma_1 / sigma_1t) ** 2 + (sigma_2 / sigma_2t) ** 2 - (sigma_1 * sigma_2 / sigma_1t ** 2) + (
+                            tau_12 / tau_12f) ** 2))
+                p = solve(equation, p)
+                pressures[angle] = max(Matrix(p) / 1e6)
+            elif criteria == FailureCriteria.TsaiWu:
+                f_ijs = comp.f_ij_elements()
+                a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
+                     - 0.5 * sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
+                b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
+                eq2 = Eq(1, a + b)
+                p = solve(eq2, p)
+                pressures[angle] = max(Matrix(p) / 1e6)
+            elif criteria == FailureCriteria.MaxCriteria:
+                properties = comp.composite_type.safety_properties
+                sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
+                eq1 = Eq(sigma_1 / sigma_1t, 1)
+                eq2 = Eq(sigma_2 / sigma_2t, 1)
+                eq3 = Eq(tau_12 / tau_12f, 1)
+                p1 = max(solve(eq1, p))
+                p2 = max(solve(eq2, p))
+                p3 = max(solve(eq3, p))
+                pressures[angle] = [p1 / 1e6, p2 / 1e6, p3 / 1e6]
+            else:
+                raise ValueError("Invalid failure criteria")
         return dict(pressures)
 
 
