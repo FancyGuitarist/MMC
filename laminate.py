@@ -18,7 +18,7 @@ class LaminateAngles:
         Syntax:
         ± : plus or minus, ¬ : non-symmetrical, nS : n repeats with symmetry, _k : repeat character k times
         example:
-        "[0_2, ±45, ¬90]S" -> [0, 0, 45, -45, 90, -45, 45, 0, 0]
+        "[0_2/±45/¬90]S" -> [0, 0, 45, -45, 90, -45, 45, 0, 0]
         :param angles_str: string of angles separated by commas
         :returns: list of angles
         """
@@ -35,7 +35,7 @@ class LaminateAngles:
         n_global_repeats = int(n_global_repeats) if n_global_repeats else 1
 
         # Step 2: Split the content inside brackets by commas and process each part
-        segments = numbers_part.split(',')
+        segments = numbers_part.split('/')
         result_sequence = []
         single_symmetry, non_sym_len = False, None
 
@@ -255,6 +255,30 @@ class Laminate:
         equation = Eq(Matrix(self.inv_abd_matrix) * n_m, eps_kap)
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
+
+    def failure_pressure_tsai_hill(self, d: float):
+        laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
+        pressures = defaultdict(dict)
+        p = symbols('p')
+        r = d / 2
+        n_ms = Matrix([p * r * 0.5, p * r, 0, 0, 0, 0])
+        eps_kap = Matrix(self.inv_abd_matrix) * (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t)
+        for comp in self.composites:
+            angle = int(round(np.degrees(comp.angle)))
+            if angle in pressures:
+                continue
+            p = symbols('p')
+            comp_thermal_coeffs = Matrix(comp.global_thermal_coeffs[:3])
+            sigmas = Matrix(comp.global_q_matrix) * (Matrix(eps_kap[:3]) - (comp_thermal_coeffs * self.delta_t))
+            local_sigmas = Matrix(comp.t_matrix) * sigmas
+            properties = comp.composite_type.safety_properties
+            sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
+            sigma_1, sigma_2, tau_12 = local_sigmas[0], local_sigmas[1], local_sigmas[2]
+            equation = Eq(1, ((sigma_1 / sigma_1t) ** 2 + (sigma_2 / sigma_2t) ** 2 - (sigma_1 * sigma_2 / sigma_1t ** 2) + (
+                        tau_12 / tau_12f) ** 2))
+            p = solve(equation, p)
+            pressures[angle] = max(Matrix(p) / 1e6)
+        return dict(pressures)
 
     def solve_residual_stresses(self, eps_kap: dict):
         eps_mat = Matrix([eps_kap[key] * 1e-6 for key in Variables.default_eps])

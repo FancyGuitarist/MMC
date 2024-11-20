@@ -61,10 +61,10 @@ class CompositeType(StrEnum):
         :return:
         """
         if self == CompositeType.Glass_Epoxy:
-            properties_dico = {'E1': 50 * 10 ** 9, 'E2': 15.2 * 10 ** 9, 'nu_12': 0.254, 'Q66': 4.70 * 10 ** 9,
+            properties_dico = {'E1': 50 * 1e9, 'E2': 15.2 * 1e9, 'nu_12': 0.254, 'Q66': 4.70 * 1e9,
                                'nu_13': 0.254, 'nu_23': 0.428}
         elif self == CompositeType.Graphite_Epoxy:
-            properties_dico = {'E1': 155 * 10 ** 9, 'E2': 12.1 * 10 ** 9, 'nu_12': 0.248, 'Q66': 4.40 * 10 ** 9,
+            properties_dico = {'E1': 155 * 1e9, 'E2': 12.1 * 1e9, 'nu_12': 0.248, 'Q66': 4.40 * 1e9,
                                'nu_13': 0.248, 'nu_23': 0.458}
         else:
             raise ValueError("Invalid Composite Type")
@@ -83,11 +83,11 @@ class CompositeType(StrEnum):
         :return:
         """
         if self == CompositeType.Glass_Epoxy:
-            safety_properties = {'sigma_1t': 1000 * 10 ** 6, 'sigma_1c': -600 * 10 ** 6, 'sigma_2t': 30 * 10 ** 6,
-                                 'sigma_2c': -120 * 10 ** 6, 'tau_12f': 70 * 10 ** 6}
+            safety_properties = {'sigma_1t': 1000 * 1e6, 'sigma_1c': -600 * 1e6, 'sigma_2t': 30 * 1e6,
+                                 'sigma_2c': -120 * 1e6, 'tau_12f': 70 * 1e6}
         elif self == CompositeType.Graphite_Epoxy:
-            safety_properties = {'sigma_1t': 1500 * 10 ** 6, 'sigma_1c': -1250 * 10 ** 6, 'sigma_2t': 50 * 10 ** 6,
-                                 'sigma_2c': -200 * 10 ** 6, 'tau_12f': 100 * 10 ** 6}
+            safety_properties = {'sigma_1t': 1500 * 1e6, 'sigma_1c': -1250 * 1e6, 'sigma_2t': 50 * 1e6,
+                                 'sigma_2c': -200 * 1e6, 'tau_12f': 100 * 1e6}
         else:
             raise ValueError("Invalid Composite Type")
         return safety_properties
@@ -99,15 +99,15 @@ class CompositeType(StrEnum):
         :return:
         """
         if self == CompositeType.Graphite_Epoxy:
-            dico = {ExpansionType.Thermal: {'alpha_1': -0.018 * 10 ** -6, 'alpha_2': 24.3 * 10 ** -6,
-                                            'alpha_3': 24.3 * 10 ** -6},
-                    ExpansionType.Hygroscopic: {'beta_1': 146 * 10 ** -6, 'beta_2': 4770 * 10 ** -6,
-                                                'beta_3': 4770 * 10 ** -6}}
+            dico = {ExpansionType.Thermal: {'alpha_1': -0.018 * 1e-6, 'alpha_2': 24.3 * 1e-6,
+                                            'alpha_3': 24.3 * 1e-6},
+                    ExpansionType.Hygroscopic: {'beta_1': 146 * 1e-6, 'beta_2': 4770 * 1e-6,
+                                                'beta_3': 4770 * 1e-6}}
         elif self == CompositeType.Glass_Epoxy:
-            dico = {ExpansionType.Thermal: {'alpha_1': 6.34 * 10 ** -6, 'alpha_2': 23.3 * 10 ** -6,
-                                            'alpha_3': 23.3 * 10 ** -6},
-                    ExpansionType.Hygroscopic: {'beta_1': 434 * 10 ** -6, 'beta_2': 6320 * 10 ** -6,
-                                                'beta_3': 6320 * 10 ** -6}}
+            dico = {ExpansionType.Thermal: {'alpha_1': 6.34 * 1e-6, 'alpha_2': 23.3 * 1e-6,
+                                            'alpha_3': 23.3 * 1e-6},
+                    ExpansionType.Hygroscopic: {'beta_1': 434 * 1e-6, 'beta_2': 6320 * 1e-6,
+                                                'beta_3': 6320 * 1e-6}}
         else:
             raise ValueError("Invalid Composite Type")
         return dico[expansion_type]
@@ -240,7 +240,7 @@ class Composite:
         :return:
         """
         variables = self.update_variables(values, stress=True)
-        matrix = Matrix([[variables[0]], [variables[1]], [variables[2]]]) * 10 ** 6
+        matrix = Matrix([[variables[0]], [variables[1]], [variables[2]]]) * 1e6
         return matrix
 
     def strain_matrix(self, values: tuple) -> Matrix:
@@ -253,7 +253,7 @@ class Composite:
         total_matrix = None
         for index, variable in enumerate(variables):
             matrix = Matrix(
-                [variable * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
+                [variable * 1e-6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
                         self.global_hygroscopic_coeffs[index] * self.delta_m)])
             if index == 0:
                 total_matrix = matrix
@@ -284,7 +284,7 @@ class Composite:
         properties = self.composite_type.properties
         S_13 = -properties['nu_13'] / properties['E1']
         S_23 = -properties['nu_23'] / properties['E2']
-        return S_13 * (stresses[0] * 10 ** 6) + S_23 * (stresses[1] * 10 ** 6)
+        return S_13 * (stresses[0] * 1e6) + S_23 * (stresses[1] * 1e6)
 
     def epsilon_z(self, stresses: tuple):
         """
@@ -298,9 +298,9 @@ class Composite:
         S_13 = -properties['nu_13'] / properties['E1']
         S_23 = -properties['nu_23'] / properties['E2']
         epsilon_z = (((alpha_3 * self.delta_t + beta_3 * self.delta_m
-                       + (S_13 * np.cos(self.angle) ** 2 + S_23 * np.sin(self.angle) ** 2) * (stresses[0] * 10 ** 6))
-                      + (S_13 * np.sin(self.angle) ** 2 + S_23 * np.cos(self.angle) ** 2) * (stresses[1] * 10 ** 6))
-                     + 2 * (S_13 - S_23) * np.sin(self.angle) * np.cos(self.angle) * (stresses[2] * 10 ** 6))
+                       + (S_13 * np.cos(self.angle) ** 2 + S_23 * np.sin(self.angle) ** 2) * (stresses[0] * 1e6))
+                      + (S_13 * np.sin(self.angle) ** 2 + S_23 * np.cos(self.angle) ** 2) * (stresses[1] * 1e6))
+                     + 2 * (S_13 - S_23) * np.sin(self.angle) * np.cos(self.angle) * (stresses[2] * 1e6))
         return epsilon_z
 
     def solve_radial_stresses(self, pressure: float, diameter: float, thickness: float):
@@ -313,15 +313,15 @@ class Composite:
         """
         r = diameter / 2
         thickness = thickness / 1000
-        pressure = pressure * 10 ** 6
+        pressure = pressure * 1e6
         sigma_a = (pressure * r) / (thickness * 2)
         sigma_h = pressure * r / thickness
-        return {'sigma_a': sigma_a / 10 ** 6, 'sigma_h': sigma_h / 10 ** 6}
+        return {'sigma_a': sigma_a / 1e6, 'sigma_h': sigma_h / 1e6}
 
     def mechanical_strains(self, values: tuple = (Variables.epsilon_x, Variables.epsilon_y, Variables.gamma_xy)):
         mec_strains = []
         for index, strain in enumerate(values):
-            mec_strains.append(strain * 10 ** -6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
+            mec_strains.append(strain * 1e-6 - (self.global_thermal_coeffs[index] * self.delta_t) - (
                     self.global_hygroscopic_coeffs[index] * self.delta_m))
         return np.array(mec_strains)
 
@@ -351,7 +351,7 @@ class Composite:
         :return: Fs_max
         """
         properties = self.composite_type.safety_properties
-        sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
+        sigma_1, sigma_2, tau_12 = values[0] * 1e6, values[1] * 1e6, values[2] * 1e6
         security_factors = []
         if sigma_1 > 0:
             security_factors.append(properties['sigma_1t'] / sigma_1)
@@ -373,7 +373,7 @@ class Composite:
         :param values: sigma_1 (MPa), sigma_2 (MPa), tau_12 (MPa)
         :return: Fs_tsai_wu
         """
-        sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
+        sigma_1, sigma_2, tau_12 = values[0] * 1e6, values[1] * 1e6, values[2] * 1e6
         Fs_tsai_wu = symbols('Fs_tsai_wu')
         f_ijs = self.f_ij_elements()
         a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
@@ -389,7 +389,7 @@ class Composite:
         :return: Fs_tsai_hill
         """
         properties = self.composite_type.safety_properties
-        sigma_1, sigma_2, tau_12 = values[0] * 10 ** 6, values[1] * 10 ** 6, values[2] * 10 ** 6
+        sigma_1, sigma_2, tau_12 = values[0] * 1e6, values[1] * 1e6, values[2] * 1e6
         sigma_1t, sigma_1c = properties['sigma_1t'], properties['sigma_1c']
         sigma_2t, sigma_2c, tau_12f = properties['sigma_2t'], properties['sigma_2c'], properties['tau_12f']
         sigma_1R = sigma_1t if sigma_1 > 0 else sigma_1c

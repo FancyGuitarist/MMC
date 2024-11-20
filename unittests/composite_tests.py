@@ -1,6 +1,9 @@
 import unittest
-from composite import Composite, CompositeType, ExpansionType
-from sympy import symbols, Matrix, linsolve
+
+import numpy as np
+
+from composite import Composite, CompositeType
+from sympy import symbols
 
 
 class TestComposite(unittest.TestCase):
@@ -49,3 +52,10 @@ class TestComposite(unittest.TestCase):
         self.assertEqual(actual[epsilon_x], expected[epsilon_x])
         self.assertEqual(actual[epsilon_y], expected[epsilon_y])
         self.assertEqual(actual[gamma_xy], expected[gamma_xy])
+
+    def test_thermal_coefficients(self):
+        comp = Composite(composite_type=CompositeType.Graphite_Epoxy, angle=45)
+        expected = np.array([12.14, 12.14, -24.32])
+        actual = comp.global_thermal_coeffs[:3] * 1e6
+        for i in range(3):
+            self.assertEqual(round(actual[i], 2), round(expected[i], 2))
