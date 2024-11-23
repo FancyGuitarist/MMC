@@ -304,14 +304,14 @@ class Laminate:
                 p1 = max(solve(eq1, p))
                 p2 = max(solve(eq2, p))
                 p3 = max(solve(eq3, p))
-                pressures[angle] = [p1 / 1e6, p2 / 1e6, p3 / 1e6]
+                pressures[angle] = min([p1, p2, p3]) / 1e6
             else:
                 raise ValueError("Invalid failure criteria")
         return dict(pressures)
 
-
     def solve_residual_stresses(self, eps_kap: dict):
         eps_mat = Matrix([eps_kap[key] * 1e-6 for key in Variables.default_eps])
+        print(eps_mat)
         results = defaultdict(dict)
         for composite in self.composites:
             alpha_mat = Matrix(composite.global_thermal_coeffs[:3])
@@ -334,12 +334,13 @@ class Laminate:
 
     def curvature(self, x: np.ndarray, y: np.ndarray, eps_kap: dict):
         kap_x, kap_y, kap_xy = eps_kap[Variables.kap_x], eps_kap[Variables.kap_y], eps_kap[Variables.kap_xy]
+        print(kap_x, kap_y, kap_xy)
         return -0.5 * (kap_x * y ** 2 + kap_y * x ** 2 + 2 * kap_xy * x * y)
 
     def plot_curvature(self, eps_kap: dict, plate_dimensions: tuple = (0.2, 0.2)):
         length, width = plate_dimensions
-        x = np.linspace(-length, length, 100)
-        y = np.linspace(-width, width, 100)
+        x = np.linspace(-length / 2, length / 2, 100)
+        y = np.linspace(-width / 2, width / 2, 100)
         X, Y = np.meshgrid(x, y)
         Z = self.curvature(X, Y, eps_kap)
         fig = plt.figure()
