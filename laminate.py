@@ -304,7 +304,7 @@ class Laminate:
                 p1 = max(solve(eq1, p))
                 p2 = max(solve(eq2, p))
                 p3 = max(solve(eq3, p))
-                pressures[angle] = min([p1, p2, p3]) / 1e6
+                pressures[angle] = min(np.abs(np.array([p1, p2, p3]))) / 1e6
             else:
                 raise ValueError("Invalid failure criteria")
         return dict(pressures)
