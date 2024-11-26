@@ -345,9 +345,10 @@ class Laminate:
         Z = self.curvature(X, Y, eps_kap)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.plot_surface(X, Y, Z, cmap='viridis')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
+        ax.plot_surface(Y, X, Z, cmap='viridis')
+        ax.invert_yaxis()
+        ax.set_xlabel('Y') # Swapping X and Y axis to get a better view and match GMC-4250 course's convention
+        ax.set_ylabel('X')
         ax.set_zlabel('Z')
         plt.show()
         print(f"Max curvature: {np.max(Z):.4f}")
