@@ -2,6 +2,7 @@ import numpy as np
 from enum import StrEnum
 
 from sympy import symbols, Eq, solve
+import sympy
 from sympy.matrices import Matrix
 
 
@@ -353,15 +354,21 @@ class Composite:
         properties = self.composite_type.safety_properties
         sigma_1, sigma_2, tau_12 = values[0] * 1e6, values[1] * 1e6, values[2] * 1e6
         security_factors = []
-        if sigma_1 > 0:
+        if sigma_1 == 0:
+            security_factors.append(float('inf'))
+        elif sigma_1 > 0:
             security_factors.append(properties['sigma_1t'] / sigma_1)
         else:
             security_factors.append(properties['sigma_1c'] / sigma_1)
-        if sigma_2 > 0:
+        if sigma_2 == 0:
+            security_factors.append(float('inf'))
+        elif sigma_2 > 0:
             security_factors.append(properties['sigma_2t'] / sigma_2)
         else:
             security_factors.append(properties['sigma_2c'] / sigma_2)
-        if tau_12 > 0:
+        if tau_12 == 0:
+            security_factors.append(float('inf'))
+        elif tau_12 > 0:
             security_factors.append(properties['tau_12f'] / tau_12)
         else:
             security_factors.append(-properties['tau_12f'] / tau_12)
@@ -380,7 +387,7 @@ class Composite:
              - sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
         b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
         eq2 = Eq(1, a * Fs_tsai_wu ** 2 + b * Fs_tsai_wu)
-        return solve(eq2, Fs_tsai_wu)
+        return max(solve(eq2, Fs_tsai_wu))
 
     def fs_tsai_hill(self, values: tuple):
         """
@@ -398,7 +405,7 @@ class Composite:
         eq1 = Eq(1, Fs_tsai_hill ** 2 * (
                 (sigma_1 / sigma_1R) ** 2 + (sigma_2 / sigma_2R) ** 2 - (sigma_1 * sigma_2 / sigma_1R ** 2) + (
                 tau_12 / tau_12f) ** 2))
-        return solve(eq1, Fs_tsai_hill)
+        return max(solve(eq1, Fs_tsai_hill))
 
 
 if __name__ == '__main__':

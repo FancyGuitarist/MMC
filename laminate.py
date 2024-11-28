@@ -265,14 +265,14 @@ class Laminate:
 
     def failure_pressure_criteria(self, d: float, criteria: FailureCriteria):
         laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
-        pressures = defaultdict(dict)
+        results_dict = defaultdict(dict)
         p = symbols('p')
         r = d / 2
         n_ms = Matrix([p * r * 0.5, p * r, 0, 0, 0, 0])
         eps_kap = Matrix(self.inv_abd_matrix) * (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t)
         for comp in self.composites:
             angle = int(round(np.degrees(comp.angle)))
-            if angle in pressures:
+            if angle in results_dict:
                 continue
             p = symbols('p')
             comp_thermal_coeffs = Matrix(comp.global_thermal_coeffs[:3])
@@ -285,16 +285,28 @@ class Laminate:
                 equation = Eq(1, (
                             (sigma_1 / sigma_1t) ** 2 + (sigma_2 / sigma_2t) ** 2 - (sigma_1 * sigma_2 / sigma_1t ** 2) + (
                             tau_12 / tau_12f) ** 2))
-                p = solve(equation, p)
-                pressures[angle] = max(Matrix(p) / 1e6)
+                solved_p = max(Matrix(solve(equation, p)))
+                results_dict[angle]["p"] = solved_p / 1e6
+                results_dict[angle]["sigma_1"] = round(sigma_1.subs(p, solved_p) / 1e6, 2)
+                results_dict[angle]["sigma_2"] = round(sigma_2.subs(p, solved_p) / 1e6, 2)
+                results_dict[angle]["tau_12"] = round(tau_12.subs(p, solved_p) / 1e6, 2)
+                results_dict[angle]["sigma_1_actual"] = round(sigma_1.subs(p, 46 * 1e6) / 1e6, 2)
+                results_dict[angle]["sigma_2_actual"] = round(sigma_2.subs(p, 46 * 1e6) / 1e6, 2)
+                results_dict[angle]["tau_12_actual"] = round(tau_12.subs(p, 46 * 1e6) / 1e6, 2)
             elif criteria == FailureCriteria.TsaiWu:
                 f_ijs = comp.f_ij_elements()
                 a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
                      - 0.5 * sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
                 b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
                 eq2 = Eq(1, a + b)
-                p = solve(eq2, p)
-                pressures[angle] = max(Matrix(p) / 1e6)
+                solved_p = max(Matrix(solve(eq2, p)))
+                results_dict[angle]["p"] = solved_p / 1e6
+                results_dict[angle]["sigma_1"] = round(sigma_1.subs(p, solved_p) / 1e6, 2)
+                results_dict[angle]["sigma_2"] = round(sigma_2.subs(p, solved_p) / 1e6, 2)
+                results_dict[angle]["tau_12"] = round(tau_12.subs(p, solved_p) / 1e6, 2)
+                results_dict[angle]["sigma_1_actual"] = round(sigma_1.subs(p, 46 * 1e6) / 1e6, 2)
+                results_dict[angle]["sigma_2_actual"] = round(sigma_2.subs(p, 46 * 1e6) / 1e6, 2)
+                results_dict[angle]["tau_12_actual"] = round(tau_12.subs(p, 46 * 1e6) / 1e6, 2)
             elif criteria == FailureCriteria.MaxCriteria:
                 properties = comp.composite_type.safety_properties
                 sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
@@ -304,18 +316,24 @@ class Laminate:
                 p1 = max(solve(eq1, p))
                 p2 = max(solve(eq2, p))
                 p3 = max(solve(eq3, p))
-                pressures[angle] = min(np.abs(np.array([p1, p2, p3]))) / 1e6
+                smol_pp = min(np.abs(np.array([p1, p2, p3])))
+                results_dict[angle]["p"] = smol_pp / 1e6
+                results_dict[angle]["sigma_1"] = round(sigma_1.subs(p, smol_pp) / 1e6, 2)
+                results_dict[angle]["sigma_2"] = round(sigma_2.subs(p, smol_pp) / 1e6, 2)
+                results_dict[angle]["tau_12"] = round(tau_12.subs(p, smol_pp) / 1e6, 2)
+                results_dict[angle]["sigma_1_actual"] = round(sigma_1.subs(p, 46*1e6) / 1e6, 2)
+                results_dict[angle]["sigma_2_actual"] = round(sigma_2.subs(p, 46*1e6) / 1e6, 2)
+                results_dict[angle]["tau_12_actual"] = round(tau_12.subs(p, 46*1e6) / 1e6, 2)
             else:
                 raise ValueError("Invalid failure criteria")
-        return dict(pressures)
+        return dict(results_dict)
 
     def solve_residual_stresses(self, eps_kap: dict):
         eps_mat = Matrix([eps_kap[key] * 1e-6 for key in Variables.default_eps])
-        print(eps_mat)
         results = defaultdict(dict)
         for composite in self.composites:
             alpha_mat = Matrix(composite.global_thermal_coeffs[:3])
-            total_eps = eps_mat - alpha_mat * self.delta_t
+            total_eps = eps_mat - (alpha_mat * self.delta_t)
             equation = Eq(Matrix(composite.global_q_matrix) * total_eps, Matrix(Variables.default_stresses))
             solution = solve(equation, Variables.default_stresses)
             results[int(round(np.degrees(composite.angle)))] = {key: round(value / 1e6, 3) for key, value in solution.items()}
@@ -363,15 +381,18 @@ class Laminate:
         global_stress_layers = defaultdict(dict)
 
         for i in range(n):
-            q_matrix = self.composites[i].global_q_matrix
+            comp = self.composites[i]
+            q_matrix = comp.global_q_matrix
             eps_kap_top = eps + kap * z[i]
+            eps_kap_top = eps_kap_top - Matrix(comp.global_thermal_coeffs[:3]) * self.delta_t
             eps_kap_bot = eps + kap * z[i + 1]
+            eps_kap_bot = eps_kap_bot - Matrix(comp.global_thermal_coeffs[:3]) * self.delta_t
             equation_top = Eq(Matrix(q_matrix) * eps_kap_top, stress_mat)
             equation_bot = Eq(Matrix(q_matrix) * eps_kap_bot, stress_mat)
             solved_top = solve(equation_top, Variables.default_stresses)
             solved_bot = solve(equation_bot, Variables.default_stresses)
-            global_stress_layers[f"z_{i}"]["Top"] = {key: round(solved_top[key] / 1e6, 4) for key in solved_top}
-            global_stress_layers[f"z_{i}"]["Bottom"] = {key: round(solved_bot[key] / 1e6, 4) for key in solved_bot}
+            global_stress_layers[f"z_{i}"]["Top"] = {key: round(solved_top[key] / 1e6, 2) for key in solved_top}
+            global_stress_layers[f"z_{i}"]["Bottom"] = {key: round(solved_bot[key] / 1e6, 2) for key in solved_bot}
         self.global_stress_layers_cache = [dict(global_stress_layers), [epsilons, kappas]]
         return self.global_stress_layers_cache[0]
 

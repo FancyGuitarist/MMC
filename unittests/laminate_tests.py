@@ -149,8 +149,8 @@ class TestLaminate(unittest.TestCase):
         lam = Laminate(thetas=LaminateAngles("[±60_6]S"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
         pressures = lam.failure_pressure_criteria(d=0.6, criteria=FailureCriteria.TsaiHill)
         expected = {60: 1.81564673079054, -60: 1.81564673079054}
-        self.assertTrue(math.isclose(pressures[60], expected[60], abs_tol=1/1e2))
-        self.assertTrue(math.isclose(pressures[-60], expected[-60], abs_tol=1/1e2))
+        self.assertTrue(math.isclose(pressures[60]["p"], expected[60], abs_tol=1/1e2))
+        self.assertTrue(math.isclose(pressures[-60]["p"], expected[-60], abs_tol=1/1e2))
 
 
 class TestLaminateAngles(unittest.TestCase):
