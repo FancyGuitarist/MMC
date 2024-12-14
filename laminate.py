@@ -17,6 +17,71 @@ class FailureCriteria(StrEnum):
     MaxCriteria = "Maximum Stress Criteria"
 
 
+class RupturePressure:
+    def __init__(self, eps_kap: dict,  p: float | sympy.Symbol, composite: Composite, deltas: tuple[float, float] = (0, 0)):
+        self.p = p
+        self.composite = composite
+        self.eps_kap = eps_kap
+        self.delta_t, self.delta_m = deltas
+        self.f_s = 1
+
+    def get_sigmas_eq(self):
+        comp_thermal_coeffs = Matrix(self.composite.global_thermal_coeffs[:3])
+        comp_hygroscopic_coeffs = Matrix(self.composite.global_hygroscopic_coeffs[:3])
+        sigmas = (Matrix(self.composite.global_q_matrix) *
+                  (Matrix(self.eps_kap[:3]) - (comp_thermal_coeffs * self.delta_t) - (comp_hygroscopic_coeffs * self.delta_m)))
+        local_sigmas = Matrix(self.composite.t_matrix) * sigmas
+        sigma_1, sigma_2, tau_12 = local_sigmas[0], local_sigmas[1], local_sigmas[2]
+        return sigma_1, sigma_2, tau_12
+
+    def tsai_hill_eq(self):
+        sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
+        properties = self.composite.composite_type.safety_properties
+        sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
+        equation = Eq(1/(self.f_s ** 2), ((sigma_1 / sigma_1t) ** 2 + (sigma_2 / sigma_2t) ** 2 -
+                          (sigma_1 * sigma_2 / sigma_1t ** 2) + (tau_12 / tau_12f) ** 2))
+        return equation
+
+    def tsai_wu_eq(self):
+        sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
+        f_ijs = self.composite.f_ij_elements()
+        a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 +
+             f_ijs['F66'] * tau_12 ** 2 - sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
+        b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
+        equation = Eq(1/self.f_s, a + b)
+        return equation
+
+    def max_stress_eq(self):
+        sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
+        properties = self.composite.composite_type.safety_properties
+        sigma_1t, sigma_2t, tau_12f = properties['sigma_1c'], properties['sigma_2c'], properties['tau_12f']
+        eq1 = Eq(sigma_1 / sigma_1t, 1/self.f_s)
+        eq2 = Eq(sigma_2 / sigma_2t, 1/self.f_s)
+        eq3 = Eq(tau_12 / tau_12f, 1/self.f_s)
+        return eq1, eq2, eq3
+
+    def get_equation(self, criteria: FailureCriteria):
+        if criteria == FailureCriteria.TsaiHill:
+            return self.tsai_hill_eq()
+        elif criteria == FailureCriteria.TsaiWu:
+            return self.tsai_wu_eq()
+        elif criteria == FailureCriteria.MaxCriteria:
+            return self.max_stress_eq()
+
+    def solve_pressure(self, criteria: FailureCriteria):
+        equation = self.get_equation(criteria)
+        print(equation)
+        if criteria == FailureCriteria.MaxCriteria:
+            p1 = solve(equation[0], self.p)
+            p2 = solve(equation[1], self.p)
+            p3 = solve(equation[2], self.p)
+            print(p1, p2, p3)
+            solved = max(p1 + p2 + p3)
+        else:
+            solved = max(Matrix(solve(equation, self.p)))
+        return solved / 1e6
+
+
 class LaminateAngles:
     def __init__(self, angles_str: str):
         """
@@ -263,69 +328,27 @@ class Laminate:
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
 
-    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria):
+    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria, fs: float = 1):
         laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
+        laminate_hygroscopic_coeffs = self.laminate_expansion_coefficients[1]
         results_dict = defaultdict(dict)
+        _, H, _ = self.setup_n_H_z()
         p = symbols('p')
-        r = d / 2
-        n_ms = Matrix([p * r * 0.5, p * r, 0, 0, 0, 0])
-        eps_kap = Matrix(self.inv_abd_matrix) * (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t)
+        r = (d / 2) - H
+        print(f"r: {r}")
+        n_ms = Matrix([p * r/2, p * r, 0, 0, 0, 0])
+        eps_kap = (Matrix(self.inv_abd_matrix) *
+                   (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t +
+                    Matrix(laminate_hygroscopic_coeffs) * self.delta_m))
         for comp in self.composites:
             angle = int(round(np.degrees(comp.angle)))
             if angle in results_dict:
                 continue
             p = symbols('p')
-            comp_thermal_coeffs = Matrix(comp.global_thermal_coeffs[:3])
-            sigmas = Matrix(comp.global_q_matrix) * (Matrix(eps_kap[:3]) - (comp_thermal_coeffs * self.delta_t))
-            local_sigmas = Matrix(comp.t_matrix) * sigmas
-            sigma_1, sigma_2, tau_12 = local_sigmas[0], local_sigmas[1], local_sigmas[2]
-            if criteria == FailureCriteria.TsaiHill:
-                properties = comp.composite_type.safety_properties
-                sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
-                equation = Eq(1, (
-                            (sigma_1 / sigma_1t) ** 2 + (sigma_2 / sigma_2t) ** 2 - (sigma_1 * sigma_2 / sigma_1t ** 2) + (
-                            tau_12 / tau_12f) ** 2))
-                solved_p = max(Matrix(solve(equation, p)))
-                results_dict[angle]["p"] = solved_p / 1e6
-                results_dict[angle]["sigma_1"] = round(sigma_1.subs(p, solved_p) / 1e6, 2)
-                results_dict[angle]["sigma_2"] = round(sigma_2.subs(p, solved_p) / 1e6, 2)
-                results_dict[angle]["tau_12"] = round(tau_12.subs(p, solved_p) / 1e6, 2)
-                results_dict[angle]["sigma_1_actual"] = round(sigma_1.subs(p, 46 * 1e6) / 1e6, 2)
-                results_dict[angle]["sigma_2_actual"] = round(sigma_2.subs(p, 46 * 1e6) / 1e6, 2)
-                results_dict[angle]["tau_12_actual"] = round(tau_12.subs(p, 46 * 1e6) / 1e6, 2)
-            elif criteria == FailureCriteria.TsaiWu:
-                f_ijs = comp.f_ij_elements()
-                a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 + f_ijs['F66'] * tau_12 ** 2
-                     - 0.5 * sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
-                b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
-                eq2 = Eq(1, a + b)
-                solved_p = max(Matrix(solve(eq2, p)))
-                results_dict[angle]["p"] = solved_p / 1e6
-                results_dict[angle]["sigma_1"] = round(sigma_1.subs(p, solved_p) / 1e6, 2)
-                results_dict[angle]["sigma_2"] = round(sigma_2.subs(p, solved_p) / 1e6, 2)
-                results_dict[angle]["tau_12"] = round(tau_12.subs(p, solved_p) / 1e6, 2)
-                results_dict[angle]["sigma_1_actual"] = round(sigma_1.subs(p, 46 * 1e6) / 1e6, 2)
-                results_dict[angle]["sigma_2_actual"] = round(sigma_2.subs(p, 46 * 1e6) / 1e6, 2)
-                results_dict[angle]["tau_12_actual"] = round(tau_12.subs(p, 46 * 1e6) / 1e6, 2)
-            elif criteria == FailureCriteria.MaxCriteria:
-                properties = comp.composite_type.safety_properties
-                sigma_1t, sigma_2t, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
-                eq1 = Eq(sigma_1 / sigma_1t, 1)
-                eq2 = Eq(sigma_2 / sigma_2t, 1)
-                eq3 = Eq(tau_12 / tau_12f, 1)
-                p1 = max(solve(eq1, p))
-                p2 = max(solve(eq2, p))
-                p3 = max(solve(eq3, p))
-                smol_pp = min(np.abs(np.array([p1, p2, p3])))
-                results_dict[angle]["p"] = smol_pp / 1e6
-                results_dict[angle]["sigma_1"] = round(sigma_1.subs(p, smol_pp) / 1e6, 2)
-                results_dict[angle]["sigma_2"] = round(sigma_2.subs(p, smol_pp) / 1e6, 2)
-                results_dict[angle]["tau_12"] = round(tau_12.subs(p, smol_pp) / 1e6, 2)
-                results_dict[angle]["sigma_1_actual"] = round(sigma_1.subs(p, 46*1e6) / 1e6, 2)
-                results_dict[angle]["sigma_2_actual"] = round(sigma_2.subs(p, 46*1e6) / 1e6, 2)
-                results_dict[angle]["tau_12_actual"] = round(tau_12.subs(p, 46*1e6) / 1e6, 2)
-            else:
-                raise ValueError("Invalid failure criteria")
+            rupture = RupturePressure(eps_kap, p, comp, (self.delta_t, self.delta_m))
+            rupture.f_s = fs
+            solved_p = rupture.solve_pressure(criteria)
+            results_dict[angle]["p"] = solved_p
         return dict(results_dict)
 
     def solve_residual_stresses(self, eps_kap: dict):
@@ -352,8 +375,7 @@ class Laminate:
 
     def curvature(self, x: np.ndarray, y: np.ndarray, eps_kap: dict):
         kap_x, kap_y, kap_xy = eps_kap[Variables.kap_x], eps_kap[Variables.kap_y], eps_kap[Variables.kap_xy]
-        print(kap_x, kap_y, kap_xy)
-        return -0.5 * (kap_x * y ** 2 + kap_y * x ** 2 + 2 * kap_xy * x * y)
+        return -0.5 * ((kap_x * y ** 2) + (kap_y * x ** 2) + (kap_xy * x * y))
 
     def plot_curvature(self, eps_kap: dict, plate_dimensions: tuple = (0.2, 0.2)):
         length, width = plate_dimensions
@@ -363,10 +385,10 @@ class Laminate:
         Z = self.curvature(X, Y, eps_kap)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.plot_surface(Y, X, Z, cmap='viridis')
+        ax.plot_surface(X, Y, Z, cmap='viridis')
         ax.invert_yaxis()
-        ax.set_xlabel('Y') # Swapping X and Y axis to get a better view and match GMC-4250 course's convention
-        ax.set_ylabel('X')
+        ax.set_xlabel('X') # Swapping X and Y axis to get a better view and match GMC-4250 course's convention
+        ax.set_ylabel('Y')
         ax.set_zlabel('Z')
         plt.show()
         print(f"Max curvature: {np.max(Z):.4f}")
@@ -561,3 +583,28 @@ class Laminate:
                 print(f"{key}: {value / 1e9:.2f} GPa")
             else:
                 print(f"{key}: {value:.4f}")
+
+    def triple_gauge_global_strains(self, epsilons_abc: dict, thetas: list, width=30, length=342):
+        """
+        Compute the global strains for a triple gauge array
+        :param epsilons_abc: dict of the form {'epsilon_a': [values], 'epsilon_b': [values], 'epsilon_c': [values]}
+        :param thetas: list of the gauge angles in degrees
+        :param width: width of the laminate in mm
+        :param length: length of the laminate in mm
+        :return: dictionary of the form {index: {epsilon_x: value, epsilon_y: value, gamma_xy: value}} where the values are in micrometers/meter
+        """
+        eps_x, eps_y, gam_xy = symbols('epsilon_x epsilon_y gamma_xy')
+        w, L = width * 1e-3, length * 1e-3
+        theta_a, theta_b, theta_c = thetas
+        epsilons_xy_matrix = Matrix([eps_x, eps_y, gam_xy])
+        angles_matrix = Matrix([[np.cos(theta_a)**2, np.sin(theta_a)**2, np.cos(theta_a) + np.sin(theta_a)],
+                                [np.cos(theta_b)**2, np.sin(theta_b)**2, np.cos(theta_b) + np.sin(theta_b)],
+                                [np.cos(theta_c)**2, np.sin(theta_c)**2, np.cos(theta_c) + np.sin(theta_c)]])
+        solutions = defaultdict(dict)
+        dico_length = len(epsilons_abc["epsilon_a"])
+        for index in range(dico_length):
+            epsilons_abc_matrix = Matrix([epsilons_abc["epsilon_a"][index], epsilons_abc["epsilon_b"][index], epsilons_abc["epsilon_c"][index]])
+            equation = Eq(angles_matrix * epsilons_xy_matrix, epsilons_abc_matrix)
+            solution = solve(equation, (eps_x, eps_y, gam_xy))
+            solutions[index] = {key: round(value, 4) for key, value in solution.items()}
+        return dict(solutions)

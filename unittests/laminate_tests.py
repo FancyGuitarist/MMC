@@ -139,7 +139,7 @@ class TestLaminate(unittest.TestCase):
         local_residual_stresses = lam.local_residual_stresses(solution)
         # print(local_residual_stresses)
 
-    # @unittest.skip("No tests for plotting, only for demonstration")
+    @unittest.skip("No tests for plotting, only for demonstration")
     def test_plot_curvature(self):
         lam = Laminate(thetas=LaminateAngles("[0_2/ 90_2]"), composite_type=CompositeType.Graphite_Epoxy, delta_t=-150)
         solution = lam.solve_eps_kap_n_m(ns=[0, 0, 0], ms=[0, 0, 0])

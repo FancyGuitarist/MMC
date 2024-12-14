@@ -42,6 +42,7 @@ class CompositeType(StrEnum):
     """
     Glass_Epoxy = "Glass Epoxy"
     Graphite_Epoxy = "Graphite Epoxy"
+    Lab_Composite = "Lab Composite"
 
     @property
     def q_3x3_matrix(self) -> np.ndarray:
@@ -67,6 +68,9 @@ class CompositeType(StrEnum):
         elif self == CompositeType.Graphite_Epoxy:
             properties_dico = {'E1': 155 * 1e9, 'E2': 12.1 * 1e9, 'nu_12': 0.248, 'Q66': 4.40 * 1e9,
                                'nu_13': 0.248, 'nu_23': 0.458}
+        elif self == CompositeType.Lab_Composite:
+            properties_dico = {'E1': 114 * 1e9, 'E2': 5.4 * 1e9, 'nu_12': 0.3, 'Q66': 1.37 * 1e9,
+                               'nu_13': 0.3, 'nu_23': 0.3}
         else:
             raise ValueError("Invalid Composite Type")
         nu_21 = (properties_dico['E2'] / properties_dico['E1']) * properties_dico['nu_12']
