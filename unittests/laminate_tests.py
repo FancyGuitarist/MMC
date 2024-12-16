@@ -152,6 +152,22 @@ class TestLaminate(unittest.TestCase):
         self.assertTrue(math.isclose(pressures[60]["p"], expected[60], abs_tol=1/1e2))
         self.assertTrue(math.isclose(pressures[-60]["p"], expected[-60], abs_tol=1/1e2))
 
+    def test_pressure_failure_tsai_wu(self):
+        lam = Laminate(thetas=LaminateAngles("[90_141/0_141/90_141]S"), composite_type=CompositeType.Graphite_Epoxy,
+                       delta_t=-173)
+        pressures_tsai_wu = lam.failure_pressure_criteria(d=1.7, criteria=FailureCriteria.TsaiWu, compression=True,
+                                                          use_interior_r=True)
+        expected = {90: {'p': -310.472054375642}, 0: {'p': -331.377418829154}}
+        self.assertTrue(math.isclose(pressures_tsai_wu[90]["p"], expected[90]["p"], abs_tol=1/1e2))
+
+    def test_pressure_failure_max(self):
+        lam = Laminate(thetas=LaminateAngles("[90_141/0_141/90_141]S"), composite_type=CompositeType.Graphite_Epoxy,
+                       delta_t=-173)
+        pressures_max = lam.failure_pressure_criteria(d=1.7, criteria=FailureCriteria.MaxCriteria, compression=True,
+                                                      use_interior_r=True)
+        expected = {90: {'p': -150.217673656349}, 0: {'p': 3.30760966723704e+17}}
+        self.assertTrue(math.isclose(pressures_max[90]["p"], expected[90]["p"], abs_tol=1/1e2))
+
 
 class TestLaminateAngles(unittest.TestCase):
     def test_plus_minus(self):
