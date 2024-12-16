@@ -340,10 +340,10 @@ class Composite:
         properties = self.composite_type.safety_properties
         sigma_1t, sigma_1c = properties['sigma_1t'], properties['sigma_1c']
         sigma_2t, sigma_2c, tau_12f = properties['sigma_2t'], properties['sigma_2c'], properties['tau_12f']
-        F1 = (1 / sigma_1t + 1 / sigma_1c)
+        F1 = (1 / sigma_1t) + (1 / sigma_1c)
         F11 = -1 / (sigma_1t * sigma_1c)
         F66 = (1 / tau_12f) ** 2
-        F2 = (1 / sigma_2t + 1 / sigma_2c)
+        F2 = (1 / sigma_2t) + (1 / sigma_2c)
         F22 = -1 / (sigma_2t * sigma_2c)
         F12 = -0.5 * np.sqrt(F11 * F22)
         dico = {'F1': F1, 'F11': F11, 'F66': F66, 'F2': F2, 'F22': F22, 'F12': F12}

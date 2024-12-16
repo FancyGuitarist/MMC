@@ -45,16 +45,15 @@ class RupturePressure:
     def tsai_wu_eq(self):
         sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
         f_ijs = self.composite.f_ij_elements()
-        a = (f_ijs['F11'] * sigma_1 ** 2 + f_ijs['F22'] * sigma_2 ** 2 +
-             f_ijs['F66'] * tau_12 ** 2 - sigma_1 * sigma_2 * np.sqrt(f_ijs['F11'] * f_ijs['F22']))
-        b = f_ijs['F1'] * sigma_1 + f_ijs['F2'] * sigma_2
-        equation = Eq(1/self.f_s, a + b)
+        Wu = (f_ijs["F1"] * sigma_1 + f_ijs["F2"] * sigma_2 + f_ijs["F11"] * sigma_1 ** 2 + f_ijs["F22"] * sigma_2 ** 2
+              + f_ijs["F66"] * tau_12 ** 2 - np.sqrt(f_ijs["F11"] * f_ijs["F22"]) * sigma_1 * sigma_2)
+        equation = Eq(1/self.f_s, Wu)
         return equation
 
     def max_stress_eq(self):
         sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
         properties = self.composite.composite_type.safety_properties
-        sigma_1t, sigma_2t, tau_12f = properties['sigma_1c'], properties['sigma_2c'], properties['tau_12f']
+        sigma_1t, sigma_2t, tau_12f = properties['sigma_1c'], properties['sigma_2c'], -properties['tau_12f']
         eq1 = Eq(sigma_1 / sigma_1t, 1/self.f_s)
         eq2 = Eq(sigma_2 / sigma_2t, 1/self.f_s)
         eq3 = Eq(tau_12 / tau_12f, 1/self.f_s)
@@ -70,7 +69,6 @@ class RupturePressure:
 
     def solve_pressure(self, criteria: FailureCriteria):
         equation = self.get_equation(criteria)
-        print(equation)
         if criteria == FailureCriteria.MaxCriteria:
             p1 = solve(equation[0], self.p)
             p2 = solve(equation[1], self.p)
@@ -78,7 +76,7 @@ class RupturePressure:
             print(p1, p2, p3)
             solved = max(p1 + p2 + p3)
         else:
-            solved = max(Matrix(solve(equation, self.p)))
+            solved = min(Matrix(solve(equation, self.p)))
         return solved / 1e6
 
 
@@ -336,7 +334,7 @@ class Laminate:
         p = symbols('p')
         r = (d / 2) - H
         print(f"r: {r}")
-        n_ms = Matrix([p * r/2, p * r, 0, 0, 0, 0])
+        n_ms = Matrix([p * r / 2, p * r, 0, 0, 0, 0])
         eps_kap = (Matrix(self.inv_abd_matrix) *
                    (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t +
                     Matrix(laminate_hygroscopic_coeffs) * self.delta_m))
