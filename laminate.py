@@ -77,7 +77,6 @@ class RupturePressure:
             p1 = solve(equation[0], self.p)
             p2 = solve(equation[1], self.p)
             p3 = solve(equation[2], self.p)
-            print(p1, p2, p3)
             solved = max(p1 + p2 + p3)
         else:
             if self.compression:
