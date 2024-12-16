@@ -24,6 +24,7 @@ class RupturePressure:
         self.eps_kap = eps_kap
         self.delta_t, self.delta_m = deltas
         self.f_s = 1
+        self.compression = False
 
     def get_sigmas_eq(self):
         comp_thermal_coeffs = Matrix(self.composite.global_thermal_coeffs[:3])
@@ -53,9 +54,12 @@ class RupturePressure:
     def max_stress_eq(self):
         sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
         properties = self.composite.composite_type.safety_properties
-        sigma_1t, sigma_2t, tau_12f = properties['sigma_1c'], properties['sigma_2c'], -properties['tau_12f']
-        eq1 = Eq(sigma_1 / sigma_1t, 1/self.f_s)
-        eq2 = Eq(sigma_2 / sigma_2t, 1/self.f_s)
+        if self.compression:
+            sigma_1R, sigma_2R, tau_12f = properties['sigma_1c'], properties['sigma_2c'], -properties['tau_12f']
+        else:
+            sigma_1R, sigma_2R, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
+        eq1 = Eq(sigma_1 / sigma_1R, 1/self.f_s)
+        eq2 = Eq(sigma_2 / sigma_2R, 1/self.f_s)
         eq3 = Eq(tau_12 / tau_12f, 1/self.f_s)
         return eq1, eq2, eq3
 
@@ -76,7 +80,10 @@ class RupturePressure:
             print(p1, p2, p3)
             solved = max(p1 + p2 + p3)
         else:
-            solved = min(Matrix(solve(equation, self.p)))
+            if self.compression:
+                solved = min(Matrix(solve(equation, self.p)))
+            else:
+                solved = max(Matrix(solve(equation, self.p)))
         return solved / 1e6
 
 
@@ -326,13 +333,17 @@ class Laminate:
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
 
-    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria, fs: float = 1):
+    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria, fs: float = 1,
+                                  compression: bool = False, use_interior_r: bool = False):
         laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
         laminate_hygroscopic_coeffs = self.laminate_expansion_coefficients[1]
         results_dict = defaultdict(dict)
         _, H, _ = self.setup_n_H_z()
         p = symbols('p')
-        r = (d / 2) - H
+        if use_interior_r:
+            r = (d / 2) - H
+        else:
+            r = d / 2
         print(f"r: {r}")
         n_ms = Matrix([p * r / 2, p * r, 0, 0, 0, 0])
         eps_kap = (Matrix(self.inv_abd_matrix) *
@@ -345,6 +356,7 @@ class Laminate:
             p = symbols('p')
             rupture = RupturePressure(eps_kap, p, comp, (self.delta_t, self.delta_m))
             rupture.f_s = fs
+            rupture.compression = compression
             solved_p = rupture.solve_pressure(criteria)
             results_dict[angle]["p"] = solved_p
         return dict(results_dict)
