@@ -43,6 +43,7 @@ class CompositeType(StrEnum):
     Glass_Epoxy = "Glass Epoxy"
     Graphite_Epoxy = "Graphite Epoxy"
     Lab_Composite = "Lab Composite"
+    IM7_977_2 = "IM7/977-2"
 
     @property
     def q_3x3_matrix(self) -> np.ndarray:
@@ -71,6 +72,9 @@ class CompositeType(StrEnum):
         elif self == CompositeType.Lab_Composite:
             properties_dico = {'E1': 114 * 1e9, 'E2': 5.4 * 1e9, 'nu_12': 0.3, 'Q66': 1.37 * 1e9,
                                'nu_13': 0.3, 'nu_23': 0.3}
+        elif self == CompositeType.IM7_977_2:
+            properties_dico = {'E1': 181 * 1e9, 'E2': 10 * 1e9, 'nu_12': 0.33, 'Q66': 6.13 * 1e9,
+                               'nu_13': 0.33, 'nu_23': 0.458}
         else:
             raise ValueError("Invalid Composite Type")
         nu_21 = (properties_dico['E2'] / properties_dico['E1']) * properties_dico['nu_12']
@@ -93,6 +97,9 @@ class CompositeType(StrEnum):
         elif self == CompositeType.Graphite_Epoxy:
             safety_properties = {'sigma_1t': 1500 * 1e6, 'sigma_1c': -1250 * 1e6, 'sigma_2t': 50 * 1e6,
                                  'sigma_2c': -200 * 1e6, 'tau_12f': 100 * 1e6}
+        elif self == CompositeType.IM7_977_2:
+            safety_properties = {'sigma_1t': 2953 * 1e6, 'sigma_1c': -1448 * 1e6, 'sigma_2t': 85 * 1e6,
+                                 'sigma_2c': -200 * 1e6, 'tau_12f': 127 * 1e6}
         else:
             raise ValueError("Invalid Composite Type")
         return safety_properties
@@ -113,6 +120,11 @@ class CompositeType(StrEnum):
                                             'alpha_3': 23.3 * 1e-6},
                     ExpansionType.Hygroscopic: {'beta_1': 434 * 1e-6, 'beta_2': 6320 * 1e-6,
                                                 'beta_3': 6320 * 1e-6}}
+        elif self == CompositeType.IM7_977_2:
+            dico = {ExpansionType.Thermal: {'alpha_1': 0.1839 * 1e-6, 'alpha_2': 23.05 * 1e-6,
+                                            'alpha_3': 23.05 * 1e-6},
+                    ExpansionType.Hygroscopic: {'beta_1': None, 'beta_2': None,
+                                                'beta_3': None}}
         else:
             raise ValueError("Invalid Composite Type")
         return dico[expansion_type]
