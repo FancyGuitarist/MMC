@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from enum import StrEnum
 
+p_symbol = symbols("p")
+fs_symbol = symbols("f_s")
+
 
 class FailureCriteria(StrEnum):
     TsaiHill = "Tsai-Hill"
@@ -46,9 +49,10 @@ class RupturePressure:
     def tsai_wu_eq(self):
         sigma_1, sigma_2, tau_12 = self.get_sigmas_eq()
         f_ijs = self.composite.f_ij_elements()
-        Wu = (f_ijs["F1"] * sigma_1 + f_ijs["F2"] * sigma_2 + f_ijs["F11"] * sigma_1 ** 2 + f_ijs["F22"] * sigma_2 ** 2
-              + f_ijs["F66"] * tau_12 ** 2 - np.sqrt(f_ijs["F11"] * f_ijs["F22"]) * sigma_1 * sigma_2)
-        equation = Eq(1/self.f_s, Wu)
+        a = f_ijs["F11"] * sigma_1 ** 2 + f_ijs["F22"] * sigma_2 ** 2 + f_ijs["F66"] * tau_12 ** 2 - np.sqrt(f_ijs["F11"] * f_ijs["F22"]) * sigma_1 * sigma_2
+        b = f_ijs["F1"] * sigma_1 + f_ijs["F2"] * sigma_2
+        Wu = a * self.f_s ** 2 + b * self.f_s
+        equation = Eq(1, Wu)
         return equation
 
     def max_stress_eq(self):
@@ -58,9 +62,9 @@ class RupturePressure:
             sigma_1R, sigma_2R, tau_12f = properties['sigma_1c'], properties['sigma_2c'], -properties['tau_12f']
         else:
             sigma_1R, sigma_2R, tau_12f = properties['sigma_1t'], properties['sigma_2t'], properties['tau_12f']
-        eq1 = Eq(sigma_1 / sigma_1R, 1/self.f_s)
-        eq2 = Eq(sigma_2 / sigma_2R, 1/self.f_s)
-        eq3 = Eq(tau_12 / tau_12f, 1/self.f_s)
+        eq1 = Eq(sigma_1R / sigma_1, self.f_s)
+        eq2 = Eq(sigma_2R / sigma_2, self.f_s)
+        eq3 = Eq(tau_12f / tau_12, self.f_s)
         return eq1, eq2, eq3
 
     def get_equation(self, criteria: FailureCriteria):
@@ -71,19 +75,34 @@ class RupturePressure:
         elif criteria == FailureCriteria.MaxCriteria:
             return self.max_stress_eq()
 
-    def solve_pressure(self, criteria: FailureCriteria):
+    def solve_pressure_or_f_s(self, criteria: FailureCriteria):
         equation = self.get_equation(criteria)
-        if criteria == FailureCriteria.MaxCriteria:
-            p1 = solve(equation[0], self.p)
-            p2 = solve(equation[1], self.p)
-            p3 = solve(equation[2], self.p)
-            solved = max(p1 + p2 + p3)
+        if isinstance(self.p, sympy.Symbol):
+            variable = self.p
+            factor = 1e6
+            solve_for = "p"
+        elif isinstance(self.f_s, sympy.Symbol):
+            variable = self.f_s
+            factor = 1
+            solve_for = "f_s"
         else:
-            if self.compression:
-                solved = min(Matrix(solve(equation, self.p)))
+            raise ValueError("Cannot solve for both p and f_s.")
+        if criteria == FailureCriteria.MaxCriteria:
+            p1 = solve(equation[0], variable)
+            p2 = solve(equation[1], variable)
+            p3 = solve(equation[2], variable)
+            if solve_for == "p":
+                solved = max(p1 + p2 + p3)
             else:
-                solved = max(Matrix(solve(equation, self.p)))
-        return solved / 1e6
+                solved = min(np.abs(p1 + p2 + p3))
+        else:
+            if self.compression and solve_for == "p":
+                solved = min(Matrix(solve(equation, variable)))
+            elif not self.compression and solve_for == "p":
+                solved = max(Matrix(solve(equation, variable)))
+            else:
+                solved = max(Matrix(solve(equation, variable)))
+        return round(solved / factor, 5)
 
 
 class LaminateAngles:
@@ -179,6 +198,7 @@ class Laminate:
         self.n_H_z_cache, self.abd_matrix_cache, self.inv_abd_cache = None, None, None
         self.global_stress_layers_cache = [None, None]
         self.local_stress_layers_cache = [None, None]
+        self.current_loads = Matrix([0, 0, 0, 0, 0, 0])
 
     @property
     def q_k(self):
@@ -319,6 +339,14 @@ class Laminate:
             results[key] = round(val, 3)
         return results
 
+    def add_forces_and_moments(self, ns: list[float], ms: list[float]):
+        new_nm = Matrix(ns + ms)
+        if self.current_loads is None:
+            self.current_loads = new_nm
+        else:
+            self.current_loads += new_nm
+        return self.current_loads
+
     def solve_eps_kap_n_m(self,
                           epsilons: list[Variables | float] = Variables.default_eps,
                           kappas: list[Variables | float] = Variables.default_kap,
@@ -327,24 +355,29 @@ class Laminate:
         variables_to_solve = self.get_variables_to_solve(epsilons + kappas + ns + ms)
         thermal_matrix, hygroscopic_matrix = self.laminate_expansion_coefficients
         eps_kap, n_m = Matrix(epsilons + kappas), Matrix(ns + ms)
-        n_m = n_m + Matrix(thermal_matrix) * self.delta_t + Matrix(hygroscopic_matrix) * self.delta_m
+        n_m = n_m + self.current_loads + Matrix(thermal_matrix) * self.delta_t + Matrix(hygroscopic_matrix) * self.delta_m
         equation = Eq(Matrix(self.inv_abd_matrix) * n_m, eps_kap)
         solution = solve(equation, variables_to_solve)
         return self.adjust_solution_units(solution)
 
-    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria, fs: float = 1,
+    def failure_pressure_criteria(self, d: float, criteria: FailureCriteria, fs=None, p=None,
                                   compression: bool = False, use_interior_r: bool = False):
+        if p is None and fs is None:
+            raise ValueError("Either p or f_s must be provided.")
+        if p is None:
+            p = p_symbol
+        if fs is None:
+            fs = fs_symbol
         laminate_thermal_coeffs = self.laminate_expansion_coefficients[0]
         laminate_hygroscopic_coeffs = self.laminate_expansion_coefficients[1]
         results_dict = defaultdict(dict)
         _, H, _ = self.setup_n_H_z()
-        p = symbols('p')
         if use_interior_r:
             r = (d / 2) - H
         else:
             r = d / 2
-        print(f"r: {r}")
-        n_ms = Matrix([p * r / 2, p * r, 0, 0, 0, 0])
+        # print(f"r: {r}")
+        n_ms = Matrix([p * r / 2, p * r, 0, 0, 0, 0]) + self.current_loads
         eps_kap = (Matrix(self.inv_abd_matrix) *
                    (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t +
                     Matrix(laminate_hygroscopic_coeffs) * self.delta_m))
@@ -352,12 +385,19 @@ class Laminate:
             angle = int(round(np.degrees(comp.angle)))
             if angle in results_dict:
                 continue
-            p = symbols('p')
-            rupture = RupturePressure(eps_kap, p, comp, (self.delta_t, self.delta_m))
-            rupture.f_s = fs
+            p_current, fs_current = p, fs
+            rupture = RupturePressure(eps_kap, p_current, comp, (self.delta_t, self.delta_m))
+            rupture.f_s = fs_current
             rupture.compression = compression
-            solved_p = rupture.solve_pressure(criteria)
+            solved = rupture.solve_pressure_or_f_s(criteria)
+            if isinstance(p, sympy.Symbol):
+                solved_p = solved
+                solved_fs = fs_current
+            else:
+                solved_p = p_current
+                solved_fs = solved
             results_dict[angle]["p"] = solved_p
+            results_dict[angle]["f_s"] = solved_fs
         return dict(results_dict)
 
     def solve_residual_stresses(self, eps_kap: dict):
