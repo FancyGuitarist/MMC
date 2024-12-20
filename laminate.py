@@ -119,7 +119,7 @@ class LaminateAngles:
         """
         self.angles_str = angles_str
 
-    def get_angles_list(self) -> list:
+    def get_angles_list(self, verbose=False) -> list:
         # Step 1: Extract the main pattern and check for symmetry
         main_pattern = r"\[(.+)\](\d*)(S?)"
         main_match = re.match(main_pattern, self.angles_str)
@@ -136,17 +136,21 @@ class LaminateAngles:
 
         for segment in segments:
             # Step 3: Handle each segment like ±45, 90_2, or 0
-            pattern = r"([¬]?\s*[±]?\d+)(?:_(\d+))?"
+            pattern = r"([¬]?\s*[±]?[-]?\d+)(?:_(\d+))?"
             match = re.match(pattern, segment.strip())
             if not match:
                 continue
 
             value_str, repeat_count = match.groups()
-            value = int(value_str.lstrip('¬').lstrip('±'))
+            if verbose:
+                print(f"Value: {value_str}, Repeat: {repeat_count}")
+            value = int(value_str.lstrip('¬').lstrip('±').lstrip('-'))
 
             # Determine if the value has a ± sign
             if '±' in value_str:
                 sequence = [value, -value]
+            elif '-' in value_str:
+                sequence = [-value]
             else:
                 sequence = [value]
 
@@ -377,6 +381,7 @@ class Laminate:
         else:
             r = d / 2
         # print(f"r: {r}")
+        # n_ms = Matrix([p * r / (2*H), p * r / H, 0, 0, 0, 0]) + self.current_loads
         n_ms = Matrix([p * r / 2, p * r, 0, 0, 0, 0]) + self.current_loads
         eps_kap = (Matrix(self.inv_abd_matrix) *
                    (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t +

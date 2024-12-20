@@ -310,3 +310,18 @@ class TestLaminateAngles(unittest.TestCase):
         angles = "[0/ 45/ ¬90]2S"
         lam_angles = LaminateAngles(angles)
         self.assertRaises(ValueError, lam_angles.get_angles_list)
+
+    def test_combinations_1(self):
+        angles = "[0/ 45/ 90/ ±45/ 90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, 45, 90, 45, -45, 90, 90, -45, 45, 90, 45, 0])
+
+    def test_combinations_w_minus(self):
+        angles = "[0_2/45/-45/0_2/45/-45/0]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(verbose=True), [0, 0, 45, -45, 0, 0, 45, -45, 0, 0, -45, 45, 0, 0, -45, 45, 0, 0])
+
+    def test_w_random_whitespaces(self):
+        angles = "[0/ -45/ 90/±45/ 90]S"
+        lam_angles = LaminateAngles(angles)
+        self.assertEqual(lam_angles.get_angles_list(), [0, -45, 90, 45, -45, 90, 90, -45, 45, 90, -45, 0])
