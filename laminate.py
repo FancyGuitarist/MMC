@@ -365,7 +365,7 @@ class Laminate:
         return self.adjust_solution_units(solution)
 
     def failure_pressure_criteria(self, d: float, criteria: FailureCriteria, fs=None, p=None,
-                                  compression: bool = False, use_interior_r: bool = False):
+                                  compression: bool = False, use_interior_r: bool = False, verbose: bool = False):
         if p is None and fs is None:
             raise ValueError("Either p or f_s must be provided.")
         if p is None:
@@ -380,9 +380,9 @@ class Laminate:
             r = (d / 2) - H
         else:
             r = d / 2
-        # print(f"r: {r}")
-        # n_ms = Matrix([p * r / (2*H), p * r / H, 0, 0, 0, 0]) + self.current_loads
         n_ms = Matrix([p * r / 2, p * r, 0, 0, 0, 0]) + self.current_loads
+        if verbose:
+            print(f"Thermal loads: {np.round((np.array(laminate_thermal_coeffs) * self.delta_t)/1e3, 3)} kN/m")
         eps_kap = (Matrix(self.inv_abd_matrix) *
                    (n_ms + Matrix(laminate_thermal_coeffs) * self.delta_t +
                     Matrix(laminate_hygroscopic_coeffs) * self.delta_m))

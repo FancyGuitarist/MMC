@@ -123,8 +123,8 @@ class CompositeType(StrEnum):
         elif self == CompositeType.IM7_977_2:
             dico = {ExpansionType.Thermal: {'alpha_1': 0.1839 * 1e-6, 'alpha_2': 23.05 * 1e-6,
                                             'alpha_3': 23.05 * 1e-6},
-                    ExpansionType.Hygroscopic: {'beta_1': None, 'beta_2': None,
-                                                'beta_3': None}}
+                    ExpansionType.Hygroscopic: {'beta_1': 0, 'beta_2': 0,
+                                                'beta_3': 0}}
         else:
             raise ValueError("Invalid Composite Type")
         return dico[expansion_type]

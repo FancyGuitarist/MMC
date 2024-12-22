@@ -1,2 +1,4 @@
 
 tests.py
+/__pycache__
+/unittests/__pycache__
